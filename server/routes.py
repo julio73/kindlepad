@@ -1,0 +1,101 @@
+"""API routes for KindlePad."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
+from pydantic import BaseModel
+
+from server.auth import require_auth
+
+router = APIRouter()
+
+
+class TouchRequest(BaseModel):
+    x: int
+    y: int
+
+
+@router.get("/screen", dependencies=[Depends(require_auth)])
+async def get_screen(request: Request) -> Response:
+    """Render the dashboard and return a grayscale PNG."""
+    engine = request.app.state.engine
+    tfl_client = request.app.state.tfl_client
+    dirigera_client = request.app.state.dirigera_client
+    config = request.app.state.config
+
+    now = datetime.now(timezone.utc).strftime("%H:%M")
+
+    # Fetch TfL statuses
+    tfl_statuses: list[dict] = []
+    if tfl_client is not None:
+        try:
+            statuses = await tfl_client.get_statuses()
+            tfl_statuses = [
+                {"name": s.name, "status_text": s.status_text, "severity": s.severity}
+                for s in statuses
+            ]
+        except Exception:
+            tfl_statuses = []
+
+    # Fetch light states
+    lights: list[dict] = []
+    if dirigera_client is not None:
+        try:
+            light_states = dirigera_client.get_lights()
+            lights = [
+                {"id": l.id, "name": l.name, "is_on": l.is_on}
+                for l in light_states
+            ]
+        except Exception:
+            lights = []
+
+    # Fall back to config-defined devices as mock data if no live data
+    if not lights and config.dirigera.devices:
+        lights = [
+            {"id": d.id, "name": d.name, "is_on": False}
+            for d in config.dirigera.devices
+            if d.type == "light"
+        ]
+
+    png_bytes, touchmap = engine.render_dashboard(lights, tfl_statuses, now)
+
+    # Store latest touchmap for touch resolution
+    request.app.state.touchmap = touchmap
+
+    return Response(content=png_bytes, media_type="image/png")
+
+
+@router.post("/touch", dependencies=[Depends(require_auth)])
+async def handle_touch(body: TouchRequest, request: Request) -> dict:
+    """Resolve a touch event and dispatch the corresponding action."""
+    touchmap = getattr(request.app.state, "touchmap", None)
+    if touchmap is None:
+        return {"action": None, "refresh": False}
+
+    zone = touchmap.resolve(body.x, body.y)
+    if zone is None:
+        return {"action": None, "refresh": False}
+
+    dirigera_client = request.app.state.dirigera_client
+
+    # Dispatch actions
+    refresh = False
+    if zone.action in ("light_on", "light_off") and dirigera_client is not None:
+        target_state = zone.action == "light_on"
+        device_id = zone.params.get("device_id", "")
+        try:
+            dirigera_client.set_on(device_id, target_state)
+            refresh = True
+        except Exception:
+            pass
+
+    return {"action": zone.action, "refresh": refresh}
+
+
+@router.get("/health")
+async def health() -> dict:
+    """Health check endpoint — no auth required."""
+    return {"status": "ok"}
