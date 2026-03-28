@@ -28,10 +28,12 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
 
         if config.dirigera.hub_ip and config.dirigera.token:
             device_ids = [d.id for d in config.dirigera.devices]
+            name_map = {d.id: d.name for d in config.dirigera.devices}
             dirigera_client = DirigeraClient(
                 hub_ip=config.dirigera.hub_ip,
                 token=config.dirigera.token,
                 device_ids=device_ids,
+                name_map=name_map,
             )
     except (ImportError, Exception):
         pass
