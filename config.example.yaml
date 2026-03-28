@@ -1,0 +1,29 @@
+server:
+  host: "0.0.0.0"
+  port: 8070
+  token: "change-me-to-a-secure-token"
+
+screen:
+  width: 1072
+  height: 1448
+
+dirigera:
+  hub_ip: "192.168.1.100"
+  token: "your-dirigera-hub-token"
+  devices:
+    - id: "light-living-room"
+      name: "Living Room"
+      type: "light"
+    - id: "light-bedroom"
+      name: "Bedroom"
+      type: "light"
+
+tfl:
+  refresh_interval_seconds: 120
+  lines:
+    - id: "central"
+      display_name: "Central"
+    - id: "green-line"
+      display_name: "Green Line"
+    - id: "northern"
+      display_name: "Northern"
