@@ -185,13 +185,13 @@ class TestParseDepartures:
 
         d0 = departures[0]
         assert isinstance(d0, TrainDeparture)
-        assert d0.destination == "Northtown Underground Station"
+        assert d0.destination == "Northtown"
         assert d0.minutes == 2  # 120 seconds // 60
         assert d0.direction == "outbound"
         assert d0.line_name == "Blue Line"
 
         d1 = departures[1]
-        assert d1.destination == "Southbury Underground Station"
+        assert d1.destination == "Southbury"
         assert d1.minutes == 5  # 300 seconds // 60
         assert d1.direction == "inbound"
 

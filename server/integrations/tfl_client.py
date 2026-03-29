@@ -61,6 +61,18 @@ def _parse_statuses(data: list[dict]) -> list[LineStatus]:
     return results
 
 
+def _shorten_station(name: str) -> str:
+    """Strip common suffixes from station names for compact display."""
+    for suffix in (" Underground Station", " Rail Station", " DLR Station", " Station"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    # Shorten "Long Station Name" → "Northtown" etc.
+    name = name.replace("Terminal ", "T")
+    name = name.replace("Terminals ", "T")
+    return name
+
+
 class TflClient:
     """Client for fetching TfL tube line statuses."""
 
@@ -115,7 +127,7 @@ class TflClient:
             minutes = int(item.get("timeToStation", 0)) // 60
             departures.append(
                 TrainDeparture(
-                    destination=item.get("destinationName", "Unknown"),
+                    destination=_shorten_station(item.get("destinationName", "Unknown")),
                     minutes=minutes,
                     direction=item.get("direction", ""),
                     line_name=item.get("lineName", ""),
