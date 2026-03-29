@@ -324,7 +324,7 @@ def draw_weather(
     y: int,
     width: int,
 ) -> int:
-    """Draw weather info: icon + large temperature + condition + details.
+    """Draw weather in 3-column layout: icon | temps | condition.
 
     Returns the y position below the weather section.
     """
@@ -333,37 +333,33 @@ def draw_weather(
     high = weather.get("high", 0)
     low = weather.get("low", 0)
     rain = weather.get("rain_chance", 0)
-
-    icon_size = 40
-    icon_x = x
-    icon_y = y
-
-    _draw_weather_icon(draw, code, icon_x, icon_y, icon_size)
-
-    # Temperature in display font (large) next to icon
-    temp_text = f"{temp:.0f}\u00b0C"
-    text_x = icon_x + icon_size + 12
-    draw.text((text_x, icon_y), temp_text, fill=FG, font=font_display)
-
-    # Condition text below temperature in small font
     condition = weather.get("condition_text", "")
-    heading_bbox = draw.textbbox((0, 0), temp_text, font=font_display)
-    heading_h = heading_bbox[3] - heading_bbox[1]
-    draw.text(
-        (text_x, icon_y + heading_h + 4),
-        condition,
-        fill=GRAY_MID,
-        font=font_small,
-    )
 
-    # High/Low and Rain details below the icon area
-    detail_y = icon_y + icon_size + 10
-    detail_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0   Rain: {rain}%"
-    draw.text((x, detail_y), detail_text, fill=FG, font=font_small)
+    # Column 1: Icon (~50px)
+    icon_size = 50
+    _draw_weather_icon(draw, code, x, y, icon_size)
 
-    detail_bbox = draw.textbbox((0, 0), detail_text, font=font_small)
-    detail_h = detail_bbox[3] - detail_bbox[1]
-    y = detail_y + detail_h + SECTION_GAP
+    # Column 2: Temps (after icon)
+    temp_x = x + icon_size + 12
+    temp_text = f"{temp:.0f}\u00b0C"
+    draw.text((temp_x, y), temp_text, fill=FG, font=font_display)
+    temp_bbox = draw.textbbox((0, 0), temp_text, font=font_display)
+    temp_h = temp_bbox[3] - temp_bbox[1]
+    temp_w = temp_bbox[2] - temp_bbox[0]
+
+    hl_text = f"H:{high:.0f}\u00b0 L:{low:.0f}\u00b0"
+    draw.text((temp_x, y + temp_h + 4), hl_text, fill=GRAY_MID, font=font_small)
+
+    # Column 3: Condition + rain (takes remaining width)
+    cond_x = temp_x + temp_w + 20
+    draw.text((cond_x, y + 4), condition, fill=FG, font=font_body)
+    cond_bbox = draw.textbbox((0, 0), condition, font=font_body)
+    cond_h = cond_bbox[3] - cond_bbox[1]
+
+    rain_text = f"Rain: {rain}%"
+    draw.text((cond_x, y + 4 + cond_h + 4), rain_text, fill=GRAY_MID, font=font_small)
+
+    y += max(icon_size, temp_h + 24) + SECTION_GAP
     return y
 
 
