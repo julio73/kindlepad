@@ -335,31 +335,37 @@ def draw_weather(
     rain = weather.get("rain_chance", 0)
     condition = weather.get("condition_text", "")
 
-    # Column 1: Icon (~50px)
-    icon_size = 50
+    # Separator above weather
+    draw.line([(x, y), (x + width, y)], fill=GRAY_LIGHT, width=1)
+    y += 14
+
+    # Column 1: Icon (56px, bold filled shapes)
+    icon_size = 56
     _draw_weather_icon(draw, code, x, y, icon_size)
 
-    # Column 2: Temps (after icon)
-    temp_x = x + icon_size + 12
+    # Column 2: Temps
+    temp_x = x + icon_size + 16
     temp_text = f"{temp:.0f}\u00b0C"
     draw.text((temp_x, y), temp_text, fill=FG, font=font_display)
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_display)
     temp_h = temp_bbox[3] - temp_bbox[1]
     temp_w = temp_bbox[2] - temp_bbox[0]
 
-    hl_text = f"H:{high:.0f}\u00b0 L:{low:.0f}\u00b0"
-    draw.text((temp_x, y + temp_h + 4), hl_text, fill=GRAY_MID, font=font_small)
+    hl_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0"
+    draw.text((temp_x, y + temp_h + 6), hl_text, fill=GRAY_MID, font=font_small)
 
-    # Column 3: Condition + rain (takes remaining width)
-    cond_x = temp_x + temp_w + 20
-    draw.text((cond_x, y + 4), condition, fill=FG, font=font_body)
+    # Column 3: Condition + rain
+    cond_x = temp_x + temp_w + 24
+    draw.text((cond_x, y + 6), condition, fill=FG, font=font_body)
     cond_bbox = draw.textbbox((0, 0), condition, font=font_body)
     cond_h = cond_bbox[3] - cond_bbox[1]
 
     rain_text = f"Rain: {rain}%"
-    draw.text((cond_x, y + 4 + cond_h + 4), rain_text, fill=GRAY_MID, font=font_small)
+    rain_color = FG if rain >= 50 else GRAY_MID
+    rain_font = font_body if rain >= 50 else font_small
+    draw.text((cond_x, y + 6 + cond_h + 6), rain_text, fill=rain_color, font=rain_font)
 
-    y += max(icon_size, temp_h + 24) + SECTION_GAP
+    y += max(icon_size, temp_h + 30) + SECTION_GAP
     return y
 
 
@@ -370,91 +376,104 @@ def _draw_weather_icon(
     y: int,
     size: int,
 ) -> None:
-    """Draw a weather icon using Pillow shapes based on WMO condition code."""
+    """Draw bold, filled weather icons for e-ink readability."""
+    cx = x + size // 2
+    cy = y + size // 2
+
     if code == 0:
-        # Clear: circle (sun) with rays
-        margin = 4
-        draw.ellipse(
-            [x + margin, y + margin, x + size - margin, y + size - margin],
-            outline=FG,
-            width=2,
-        )
-        cx = x + size // 2
-        cy = y + size // 2
-        r_inner = size // 2 - margin
-        r_outer = size // 2 - 1
+        # Clear: filled sun circle + thick rays
+        r = size // 4
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=FG)
+        ray_inner = r + 4
+        ray_outer = size // 2 - 2
         for angle_deg in range(0, 360, 45):
             angle = math.radians(angle_deg)
-            x1 = cx + int(r_inner * math.cos(angle))
-            y1 = cy + int(r_inner * math.sin(angle))
-            x2 = cx + int(r_outer * math.cos(angle))
-            y2 = cy + int(r_outer * math.sin(angle))
-            draw.line([(x1, y1), (x2, y2)], fill=FG, width=1)
+            x1 = cx + int(ray_inner * math.cos(angle))
+            y1 = cy + int(ray_inner * math.sin(angle))
+            x2 = cx + int(ray_outer * math.cos(angle))
+            y2 = cy + int(ray_outer * math.sin(angle))
+            draw.line([(x1, y1), (x2, y2)], fill=FG, width=3)
 
-    elif 1 <= code <= 3:
-        # Cloudy
-        _draw_cloud(draw, x, y, size)
+    elif code == 1:
+        # Mostly clear: small sun + partial cloud
+        sr = size // 6
+        sx = x + size * 3 // 4
+        sy = y + size // 4
+        draw.ellipse([sx - sr, sy - sr, sx + sr, sy + sr], fill=FG)
+        for angle_deg in range(0, 360, 60):
+            angle = math.radians(angle_deg)
+            draw.line([
+                (sx + int((sr + 2) * math.cos(angle)), sy + int((sr + 2) * math.sin(angle))),
+                (sx + int((sr + 6) * math.cos(angle)), sy + int((sr + 6) * math.sin(angle))),
+            ], fill=FG, width=2)
+        _draw_cloud_filled(draw, x, y + size // 4, size * 3 // 4)
+
+    elif 2 <= code <= 3:
+        # Cloudy / Overcast: filled cloud
+        _draw_cloud_filled(draw, x, y + 4, size)
 
     elif 45 <= code <= 48:
-        # Fog: horizontal parallel lines
-        line_y = y + 8
+        # Fog: stacked thick horizontal bars
+        bar_y = y + size // 4
         for _i in range(4):
-            draw.line([(x + 4, line_y), (x + size - 4, line_y)], fill=FG, width=2)
-            line_y += 8
+            draw.rectangle([x + 4, bar_y, x + size - 4, bar_y + 4], fill=FG)
+            bar_y += 10
 
-    elif (51 <= code <= 67) or (80 <= code <= 82):
-        # Rain: cloud + vertical drop lines
-        _draw_cloud(draw, x, y - 4, size)
-        for dx in [10, 20, 30]:
-            rx = x + dx
-            ry_top = y + size - 12
-            ry_bot = y + size - 4
-            draw.line([(rx, ry_top), (rx, ry_bot)], fill=FG, width=2)
+    elif (51 <= code <= 57):
+        # Drizzle: cloud + thin short drops
+        _draw_cloud_filled(draw, x + 2, y, size - 4)
+        drop_y = y + size * 2 // 3 + 4
+        for dx in [size // 4, size // 2, size * 3 // 4]:
+            draw.line([(x + dx, drop_y), (x + dx, drop_y + 6)], fill=FG, width=2)
+
+    elif (61 <= code <= 67) or (80 <= code <= 82):
+        # Rain: cloud + thick long drops
+        _draw_cloud_filled(draw, x + 2, y, size - 4)
+        drop_y = y + size * 2 // 3 + 4
+        for dx in [size // 5, size * 2 // 5, size * 3 // 5, size * 4 // 5]:
+            draw.line([(x + dx, drop_y), (x + dx - 3, drop_y + 10)], fill=FG, width=3)
 
     elif (71 <= code <= 77) or (85 <= code <= 86):
-        # Snow: cloud + dots
-        _draw_cloud(draw, x, y - 4, size)
-        for dx, dy in [(10, -8), (22, -4), (34, -8), (16, 0), (28, 0)]:
-            sx = x + dx
-            sy = y + size + dy - 8
-            draw.ellipse([sx - 2, sy - 2, sx + 2, sy + 2], fill=FG)
+        # Snow: cloud + filled dots
+        _draw_cloud_filled(draw, x + 2, y, size - 4)
+        dot_y = y + size * 2 // 3 + 6
+        for dx, dy in [(size // 4, 0), (size // 2, 4), (size * 3 // 4, 0),
+                        (size * 3 // 8, 10), (size * 5 // 8, 10)]:
+            draw.ellipse([x + dx - 3, dot_y + dy - 3, x + dx + 3, dot_y + dy + 3], fill=FG)
 
     elif 95 <= code <= 99:
-        # Thunderstorm: cloud + zigzag bolt
-        _draw_cloud(draw, x, y - 4, size)
-        bolt_x = x + size // 2
-        bolt_y = y + size - 14
-        draw.line(
-            [(bolt_x, bolt_y), (bolt_x - 5, bolt_y + 6),
-             (bolt_x + 3, bolt_y + 6), (bolt_x - 2, bolt_y + 14)],
-            fill=FG,
-            width=2,
-        )
+        # Thunderstorm: cloud + bold zigzag bolt
+        _draw_cloud_filled(draw, x + 2, y, size - 4)
+        bx = cx
+        by = y + size * 2 // 3
+        draw.polygon([
+            (bx - 2, by), (bx - 8, by + 10), (bx - 2, by + 10),
+            (bx - 6, by + 20), (bx + 6, by + 8), (bx, by + 8),
+            (bx + 4, by),
+        ], fill=FG)
 
     else:
-        # Unknown: question mark
-        draw.text((x + 8, y + 4), "?", fill=FG, font=font_display)
+        # Unknown
+        draw.text((x + size // 4, y + size // 4), "?", fill=FG, font=font_display)
 
 
-def _draw_cloud(
+def _draw_cloud_filled(
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
     size: int,
 ) -> None:
-    """Draw a cloud shape using overlapping ellipses."""
-    # Base ellipse (wide, lower)
-    draw.ellipse(
-        [x + 2, y + size // 3, x + size - 2, y + size * 2 // 3 + 4],
-        outline=FG,
-        width=2,
-    )
-    # Top bump (smaller, higher)
-    draw.ellipse(
-        [x + size // 4, y + 4, x + size * 3 // 4, y + size // 2 + 2],
-        outline=FG,
-        width=2,
-    )
+    """Draw a bold filled cloud shape for e-ink visibility."""
+    # Main body (wide ellipse, lower)
+    body_top = y + size * 2 // 5
+    body_bot = y + size * 3 // 4
+    draw.ellipse([x, body_top, x + size, body_bot + 4], fill=FG)
+    # Left bump
+    draw.ellipse([x + 2, body_top - size // 6, x + size // 2, body_top + size // 6], fill=FG)
+    # Right/top bump (higher, gives cloud shape)
+    draw.ellipse([x + size // 4, y + size // 6, x + size * 3 // 4, body_top + size // 8], fill=FG)
+    # Flat bottom to clean up
+    draw.rectangle([x + 4, body_bot - 2, x + size - 4, body_bot + 4], fill=FG)
 
 
 def draw_vertical_divider(
