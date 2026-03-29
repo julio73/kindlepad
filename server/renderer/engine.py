@@ -15,7 +15,7 @@ from .components import (
     draw_departure_row,
     draw_footer,
     draw_header,
-    draw_light_row,
+    draw_light_group,
     draw_room_header,
     draw_section_header,
     draw_tfl_row,
@@ -129,18 +129,12 @@ class RenderEngine:
 
             for room_name, room_lights in rooms.items():
                 ry = draw_room_header(draw, room_name, right_x, ry)
-                for light in room_lights:
-                    ry, zones = draw_light_row(
-                        draw,
-                        name=light["name"],
-                        is_on=light["is_on"],
-                        device_id=light["id"],
-                        x=right_x,
-                        y=ry,
-                        width=right_width,
-                    )
-                    for zone in zones:
-                        touchmap.add(zone)
+                ry, zones = draw_light_group(
+                    draw, room_lights, right_x, ry, right_width,
+                )
+                for zone in zones:
+                    touchmap.add(zone)
+                ry += SECTION_GAP // 2
 
         # Brightness control at bottom of right panel
         bright_y = max(ry + SECTION_GAP, self.height - 80)
