@@ -30,7 +30,7 @@ DISRUPTED_RESPONSE = [
             {
                 "statusSeverity": 6,
                 "statusSeverityDescription": "Severe Delays",
-                "reason": "Signal failure at Green Line",
+                "reason": "Signal failure at Central",
             }
         ],
     }
@@ -127,7 +127,7 @@ class TestParseDisruption:
         s = statuses[0]
         assert s.severity == 6
         assert s.status_text == "Severe Delays"
-        assert s.disruption_reason == "Signal failure at Green Line"
+        assert s.disruption_reason == "Signal failure at Central"
 
 
 class TestCaching:

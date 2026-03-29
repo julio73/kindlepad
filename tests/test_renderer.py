@@ -14,7 +14,7 @@ MOCK_LIGHTS = [
     {"id": "ghi", "name": "Hallway", "is_on": True, "room": "Hallway"},
 ]
 MOCK_TFL = [
-    {"name": "Blue Line", "status_text": "Good Service", "severity": 10},
+    {"name": "Green Line", "status_text": "Good Service", "severity": 10},
     {"name": "Red Line", "status_text": "Part Closure", "severity": 6},
 ]
 MOCK_DEPARTURES = [
