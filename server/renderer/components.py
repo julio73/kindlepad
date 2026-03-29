@@ -344,7 +344,7 @@ def draw_weather(
     _draw_weather_icon(draw, code, x, y, icon_size)
 
     # Column 2: Temps
-    temp_x = x + icon_size + 16
+    temp_x = x + icon_size + 28
     temp_text = f"{temp:.0f}\u00b0C"
     draw.text((temp_x, y), temp_text, fill=FG, font=font_display)
     temp_bbox = draw.textbbox((0, 0), temp_text, font=font_display)
@@ -355,7 +355,7 @@ def draw_weather(
     draw.text((temp_x, y + temp_h + 6), hl_text, fill=GRAY_MID, font=font_small)
 
     # Column 3: Condition (same size as temp) + rain (same gap as H/L)
-    cond_x = temp_x + temp_w + 24
+    cond_x = temp_x + temp_w + 36
     draw.text((cond_x, y), condition, fill=FG, font=font_display)
     cond_bbox = draw.textbbox((0, 0), condition, font=font_display)
     cond_h = cond_bbox[3] - cond_bbox[1]
