@@ -49,10 +49,15 @@ display_partial() {
 
 # --- Network ---
 
+get_battery() {
+    cat /sys/devices/system/yoshi_battery/yoshi_battery0/battery_capacity 2>/dev/null | tr -d '%'
+}
+
 fetch_screen() {
+    _batt="$(get_battery)"
     wget -q -O "$SCREEN_FILE" \
         --header="Authorization: Bearer ${TOKEN}" \
-        "${SERVER_URL}/screen" 2>>"$LOG_FILE"
+        "${SERVER_URL}/screen?battery=${_batt:-0}" 2>>"$LOG_FILE"
 }
 
 send_touch() {

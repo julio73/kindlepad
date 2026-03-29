@@ -40,6 +40,7 @@ class RenderEngine:
         current_time: str,
         current_date: str,
         weather: Optional[dict] = None,
+        battery_pct: Optional[int] = None,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -115,7 +116,7 @@ class RenderEngine:
 
         # Subtle time-only footer at the bottom of the left panel
         footer_y = max(ly + SECTION_GAP, self.height - 44)
-        draw_footer(draw, current_time, left_x, footer_y, left_width)
+        draw_footer(draw, current_time, left_x, footer_y, left_width, battery_pct=battery_pct)
 
         # ============================================================
         # RIGHT PANEL: Lights

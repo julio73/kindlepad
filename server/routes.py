@@ -27,6 +27,8 @@ async def get_screen(request: Request) -> Response:
     config = request.app.state.config
 
     now = datetime.now().strftime("%H:%M")
+    battery = request.query_params.get("battery", None)
+    battery_pct = int(battery) if battery and battery.isdigit() else None
     current_date = datetime.now().strftime("%a %d %b")
 
     # Build a mapping of device id -> room from config
@@ -118,6 +120,7 @@ async def get_screen(request: Request) -> Response:
         current_time=now,
         current_date=current_date,
         weather=weather,
+        battery_pct=battery_pct,
     )
 
     # Store latest touchmap for touch resolution

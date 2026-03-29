@@ -529,11 +529,18 @@ def draw_footer(
     x: int,
     y: int,
     width: int,
+    battery_pct: int | None = None,
 ) -> int:
-    """Draw a subtle timestamp in tiny text, bottom-left."""
-    text = timestamp
-    draw.text((x, y), text, fill=GRAY_MID, font=font_small)
-    bbox = draw.textbbox((0, 0), text, font=font_small)
+    """Draw timestamp left-aligned, battery right-aligned."""
+    draw.text((x, y), timestamp, fill=GRAY_MID, font=font_small)
+
+    if battery_pct is not None:
+        batt_text = f"{battery_pct}%"
+        batt_bbox = draw.textbbox((0, 0), batt_text, font=font_small)
+        batt_w = batt_bbox[2] - batt_bbox[0]
+        draw.text((x + width - batt_w, y), batt_text, fill=GRAY_MID, font=font_small)
+
+    bbox = draw.textbbox((0, 0), timestamp, font=font_small)
     text_h = bbox[3] - bbox[1]
     y += text_h + PADDING
     return y
