@@ -43,8 +43,8 @@ display_full() {
 }
 
 display_partial() {
-    # Partial GL16 refresh (no blink)
-    $FBINK -g file="$1" -W GL16 2>>"$LOG_FILE"
+    # Fast partial refresh (no blink, smoother than GL16)
+    $FBINK -g file="$1" -W GL16_FAST 2>>"$LOG_FILE"
 }
 
 # --- Network ---
@@ -56,11 +56,18 @@ fetch_screen() {
 }
 
 send_touch() {
-    wget -q -O /dev/null \
+    _response="$(wget -q -O - \
         --post-data="{\"x\":$1,\"y\":$2}" \
         --header="Content-Type: application/json" \
         --header="Authorization: Bearer ${TOKEN}" \
-        "${SERVER_URL}/touch" 2>>"$LOG_FILE"
+        "${SERVER_URL}/touch" 2>>"$LOG_FILE")"
+
+    # Check if response contains brightness setting
+    _brightness="$(echo "$_response" | sed -n 's/.*"brightness" *: *\([0-9]*\).*/\1/p')"
+    if [ -n "$_brightness" ]; then
+        echo "$_brightness" > /sys/class/backlight/max77696-bl/brightness 2>/dev/null
+        log "INFO" "Brightness set to $_brightness"
+    fi
 }
 
 # --- Touch reading ---

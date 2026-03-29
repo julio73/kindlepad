@@ -252,6 +252,75 @@ def draw_light_row(
     return y, zone
 
 
+def draw_brightness_bar(
+    draw: ImageDraw.ImageDraw,
+    level: int,
+    x: int,
+    y: int,
+    width: int,
+) -> tuple[int, list[TouchZone]]:
+    """Draw brightness control: label + 4 tap zones (off, low, med, high).
+
+    Returns (new_y, list of TouchZones).
+    """
+    # Label
+    draw.text((x, y), "Brightness", fill=GRAY_MID, font=font_small)
+    bbox = draw.textbbox((0, 0), "Brightness", font=font_small)
+    y += (bbox[3] - bbox[1]) + 8
+
+    levels = [
+        ("Off", 0),
+        ("Low", 1),
+        ("Med", 2),
+        ("High", 3),
+    ]
+    btn_gap = 8
+    btn_width = (width - btn_gap * (len(levels) - 1)) // len(levels)
+    btn_height = 36
+    zones = []
+
+    for i, (label, lvl) in enumerate(levels):
+        bx = x + i * (btn_width + btn_gap)
+        is_active = lvl == level
+
+        if is_active:
+            draw.rectangle(
+                [bx, y, bx + btn_width, y + btn_height],
+                fill=FG,
+            )
+            text_color = 255  # white
+        else:
+            draw.rectangle(
+                [bx, y, bx + btn_width, y + btn_height],
+                fill=255,
+                outline=FG,
+                width=1,
+            )
+            text_color = FG
+
+        lbl_bbox = draw.textbbox((0, 0), label, font=font_small)
+        lw = lbl_bbox[2] - lbl_bbox[0]
+        lh = lbl_bbox[3] - lbl_bbox[1]
+        draw.text(
+            (bx + (btn_width - lw) // 2, y + (btn_height - lh) // 2),
+            label,
+            fill=text_color,
+            font=font_small,
+        )
+
+        zones.append(TouchZone(
+            x=bx,
+            y=y,
+            width=btn_width,
+            height=btn_height,
+            action="set_brightness",
+            params={"level": lvl},
+        ))
+
+    y += btn_height + SECTION_GAP
+    return y, zones
+
+
 def draw_vertical_divider(
     draw: ImageDraw.ImageDraw,
     x: int,

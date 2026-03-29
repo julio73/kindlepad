@@ -19,6 +19,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     app.state.config = config
     app.state.engine = RenderEngine(config.screen)
     app.state.touchmap = None
+    app.state.brightness_level = 2  # 0=off, 1=low, 2=med, 3=high
 
     # Attempt to initialize integration clients.
     # These modules may not be fully built yet, so we handle import errors.

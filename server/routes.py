@@ -93,12 +93,15 @@ async def get_screen(request: Request) -> Response:
             if d.type == "light"
         ]
 
+    brightness_level = getattr(request.app.state, "brightness_level", 2)
+
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
         tfl_statuses=tfl_statuses,
         departures=departures,
         current_time=now,
         current_date=current_date,
+        brightness_level=brightness_level,
     )
 
     # Store latest touchmap for touch resolution
@@ -138,6 +141,18 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
             refresh = True
         except Exception:
             pass
+
+    if zone.action == "set_brightness":
+        level = zone.params.get("level", 2)
+        request.app.state.brightness_level = level
+        # Map level to actual brightness value for the Kindle
+        brightness_map = {0: 0, 1: 512, 2: 1024, 3: 2048}
+        refresh = True
+        return {
+            "action": zone.action,
+            "refresh": refresh,
+            "brightness": brightness_map.get(level, 1024),
+        }
 
     return {"action": zone.action, "refresh": refresh}
 

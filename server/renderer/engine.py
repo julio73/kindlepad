@@ -11,6 +11,7 @@ from server.config import ScreenConfig
 from server.touchmap import TouchMap
 
 from .components import (
+    draw_brightness_bar,
     draw_departure_row,
     draw_footer,
     draw_header,
@@ -37,6 +38,7 @@ class RenderEngine:
         departures: list[dict],
         current_time: str,
         current_date: str,
+        brightness_level: int = 2,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -139,6 +141,14 @@ class RenderEngine:
                     )
                     touchmap.add(zone)
                 ry += SECTION_GAP // 2
+
+        # Brightness control at bottom of right panel
+        bright_y = max(ry + SECTION_GAP, self.height - 80)
+        bright_y, bright_zones = draw_brightness_bar(
+            draw, brightness_level, right_x, bright_y, right_width
+        )
+        for zone in bright_zones:
+            touchmap.add(zone)
 
         # ============================================================
         # Vertical divider
