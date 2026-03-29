@@ -1,4 +1,8 @@
-"""Drawing components for the KindlePad two-panel landscape dashboard."""
+"""Drawing components for the KindlePad two-panel landscape dashboard.
+
+Editorial utilitarian style: high contrast, typographically-driven.
+Every mark is deliberate.
+"""
 
 from __future__ import annotations
 
@@ -10,14 +14,16 @@ from server.touchmap import TouchZone
 
 from .theme import (
     FG,
+    GRAY_DARK,
     GRAY_LIGHT,
     GRAY_MID,
     PADDING,
     ROW_HEIGHT,
     SECTION_GAP,
     font_body,
-    font_heading,
-    font_label,
+    font_display,
+    font_display_xl,
+    font_section,
     font_small,
 )
 
@@ -30,31 +36,36 @@ def draw_header(
     width: int,
     y: int,
 ) -> int:
-    """Draw title left-aligned, date+time right-aligned, then a separator line.
+    """Draw title left-aligned, date+time right-aligned, thick separator below.
 
     Returns the y position below the separator.
     """
-    draw.text((PADDING, y), title, fill=FG, font=font_heading)
+    # Title in display font, uppercase
+    title_upper = title.upper()
+    draw.text((PADDING, y), title_upper, fill=FG, font=font_display)
 
-    # Right side: "Sat 29 Mar  04:35"
+    # Right side: date + time in body font
     right_text = f"{date_str}  {time_str}"
-    rt_bbox = draw.textbbox((0, 0), right_text, font=font_heading)
+    rt_bbox = draw.textbbox((0, 0), right_text, font=font_body)
     rt_width = rt_bbox[2] - rt_bbox[0]
+    # Vertically center the smaller body text with the display text
+    title_bbox = draw.textbbox((0, 0), title_upper, font=font_display)
+    title_h = title_bbox[3] - title_bbox[1]
+    rt_h = rt_bbox[3] - rt_bbox[1]
+    rt_y = y + (title_h - rt_h) // 2
     draw.text(
-        (width - PADDING - rt_width, y),
+        (width - PADDING - rt_width, rt_y),
         right_text,
         fill=FG,
-        font=font_heading,
+        font=font_body,
     )
 
     # Advance past text
-    title_bbox = draw.textbbox((0, 0), title, font=font_heading)
-    text_height = title_bbox[3] - title_bbox[1]
-    y += text_height + 12
+    y += title_h + 14
 
-    # Full-width separator
-    draw.line([(PADDING, y), (width - PADDING, y)], fill=FG, width=2)
-    y += SECTION_GAP
+    # Thick full-width separator (width=3 for e-ink presence)
+    draw.line([(PADDING, y), (width - PADDING, y)], fill=FG, width=3)
+    y += SECTION_GAP + 4  # breathing room below separator
 
     return y
 
@@ -65,17 +76,45 @@ def draw_section_header(
     x: int,
     y: int,
 ) -> int:
-    """Draw a section label (e.g. 'NEXT TRAINS ...', 'LIGHTS').
+    """Draw a section label in DIN Alternate Bold, uppercase.
+
+    If label contains " . " (middle dot), render the part after it in
+    font_small at GRAY_MID on the same line.
 
     Returns the y position below the label.
     """
-    draw.text((x, y), label, fill=FG, font=font_body)
-    bbox = draw.textbbox((0, 0), label, font=font_body)
-    text_height = bbox[3] - bbox[1]
-    y += text_height + 6
+    if " \u00b7 " in label:
+        main_part, sub_part = label.split(" \u00b7 ", 1)
+    else:
+        main_part = label
+        sub_part = None
 
-    # Thin underline
-    draw.line([(x, y), (x + 200, y)], fill=GRAY_LIGHT, width=1)
+    main_upper = main_part.upper()
+    draw.text((x, y), main_upper, fill=FG, font=font_section)
+    main_bbox = draw.textbbox((0, 0), main_upper, font=font_section)
+    main_w = main_bbox[2] - main_bbox[0]
+    main_h = main_bbox[3] - main_bbox[1]
+
+    if sub_part:
+        # Position subtitle after main text, baseline-aligned
+        sub_bbox = draw.textbbox((0, 0), sub_part, font=font_small)
+        sub_h = sub_bbox[3] - sub_bbox[1]
+        sub_y = y + (main_h - sub_h)  # align bottoms
+        draw.text(
+            (x + main_w + 10, sub_y),
+            sub_part,
+            fill=GRAY_MID,
+            font=font_small,
+        )
+
+    y += main_h + 6
+
+    # Thin 1px rule below
+    rule_end = x + main_w + 20
+    if sub_part:
+        sub_w = draw.textbbox((0, 0), sub_part, font=font_small)[2]
+        rule_end = x + main_w + 10 + sub_w + 10
+    draw.line([(x, y), (rule_end, y)], fill=GRAY_LIGHT, width=1)
     y += SECTION_GAP
 
     return y
@@ -90,49 +129,46 @@ def draw_departure_row(
     y: int,
     width: int,
 ) -> int:
-    """Draw a departure row: '2 min   Northtown       Eastbound'.
+    """Draw a departure row with hero-sized minutes number.
 
-    Minutes left-aligned in bold (heading font), 'min' suffix in small gray,
-    destination in body font, direction right-aligned in gray.
+    Minutes in font_display_xl (commanding), "min" suffix in font_small gray,
+    destination in font_body after the minutes block.
+    Direction is omitted (implied by destination).
 
     Returns the y position below the row.
     """
-    # Minutes number (bold via heading font)
+    # Minutes number (hero element) or "Due"
     if minutes == 0:
-        min_num = "Due"
-        draw.text((x, y), min_num, fill=FG, font=font_heading)
-        num_bbox = draw.textbbox((0, 0), min_num, font=font_heading)
-        num_width = num_bbox[2] - num_bbox[0]
+        min_text = "DUE"
+        draw.text((x, y), min_text, fill=FG, font=font_display_xl)
+        num_bbox = draw.textbbox((0, 0), min_text, font=font_display_xl)
+        num_w = num_bbox[2] - num_bbox[0]
+        num_h = num_bbox[3] - num_bbox[1]
     else:
-        min_num = str(minutes)
-        draw.text((x, y), min_num, fill=FG, font=font_heading)
-        num_bbox = draw.textbbox((0, 0), min_num, font=font_heading)
-        num_width = num_bbox[2] - num_bbox[0]
+        min_text = str(minutes)
+        draw.text((x, y), min_text, fill=FG, font=font_display_xl)
+        num_bbox = draw.textbbox((0, 0), min_text, font=font_display_xl)
+        num_w = num_bbox[2] - num_bbox[0]
+        num_h = num_bbox[3] - num_bbox[1]
 
-        # "min" suffix in small gray text
-        min_suffix = " min"
-        # Vertically align the small text with the baseline
-        suffix_y = y + 4  # slight offset to align baselines
+        # "min" suffix in small gray, baseline-aligned to the number
+        suffix = "min"
+        suffix_bbox = draw.textbbox((0, 0), suffix, font=font_small)
+        suffix_h = suffix_bbox[3] - suffix_bbox[1]
+        suffix_y = y + (num_h - suffix_h)  # align baselines
         draw.text(
-            (x + num_width, suffix_y),
-            min_suffix,
+            (x + num_w + 4, suffix_y),
+            suffix,
             fill=GRAY_MID,
             font=font_small,
         )
 
-    # Destination in body font, offset from left
-    dest_x = x + 90
-    draw.text((dest_x, y), destination, fill=FG, font=font_body)
-
-    # Direction right-aligned within the panel width
-    dir_bbox = draw.textbbox((0, 0), direction, font=font_small)
-    dir_width = dir_bbox[2] - dir_bbox[0]
-    draw.text(
-        (x + width - dir_width, y + 2),
-        direction,
-        fill=GRAY_MID,
-        font=font_small,
-    )
+    # Destination in body font, offset from the minutes block
+    dest_x = x + 100
+    dest_bbox = draw.textbbox((0, 0), destination, font=font_body)
+    dest_h = dest_bbox[3] - dest_bbox[1]
+    dest_y = y + (num_h - dest_h) // 2  # vertically center with number
+    draw.text((dest_x, dest_y), destination, fill=FG, font=font_body)
 
     y += ROW_HEIGHT
     return y
@@ -149,19 +185,20 @@ def draw_tfl_row(
 ) -> int:
     """Draw a TfL line status row: line name left, status right.
 
-    severity 10 = good service (GRAY_MID), anything else = black (FG).
+    Good service (severity 10) renders status in GRAY_MID.
+    Disruptions render in FG (black) for emphasis.
     Returns the y position below the row.
     """
-    color = GRAY_MID if severity == 10 else FG
+    status_color = GRAY_MID if severity == 10 else FG
 
     draw.text((x, y), line_name, fill=FG, font=font_body)
 
     status_bbox = draw.textbbox((0, 0), status_text, font=font_body)
-    status_width = status_bbox[2] - status_bbox[0]
+    status_w = status_bbox[2] - status_bbox[0]
     draw.text(
-        (x + width - status_width, y),
+        (x + width - status_w, y),
         status_text,
-        fill=color,
+        fill=status_color,
         font=font_body,
     )
 
@@ -175,15 +212,15 @@ def draw_room_header(
     x: int,
     y: int,
 ) -> int:
-    """Draw a small room group label, slightly indented.
+    """Draw a room group label in small font, black, uppercase feel.
 
     Returns the y position below the label.
     """
-    indent = 4
-    draw.text((x + indent, y), room_name, fill=GRAY_MID, font=font_label)
-    bbox = draw.textbbox((0, 0), room_name, font=font_label)
-    text_height = bbox[3] - bbox[1]
-    y += text_height + 6
+    label = room_name.upper()
+    draw.text((x, y), label, fill=FG, font=font_small)
+    bbox = draw.textbbox((0, 0), label, font=font_small)
+    text_h = bbox[3] - bbox[1]
+    y += text_h + 6
     return y
 
 
@@ -196,9 +233,9 @@ def draw_light_button(
     y: int,
     width: int,
 ) -> tuple[int, TouchZone]:
-    """Draw a single button for a light: filled=ON, outlined=OFF. Tap to toggle.
+    """Draw a single toggle button for a light.
 
-    Shows: [  Lamp 1  ON  ] (filled) or [  Lamp 2  OFF  ] (outlined)
+    ON = filled black with white text. OFF = white with black 2px outline.
     Returns (new_y, TouchZone).
     """
     btn_height = 42
@@ -208,7 +245,12 @@ def draw_light_button(
         draw.rectangle([x, y, x + width, y + btn_height], fill=FG)
         text_color = 255
     else:
-        draw.rectangle([x, y, x + width, y + btn_height], fill=255, outline=FG, width=1)
+        draw.rectangle(
+            [x, y, x + width, y + btn_height],
+            fill=255,
+            outline=FG,
+            width=2,  # thicker border for e-ink visibility
+        )
         text_color = FG
 
     lbl_bbox = draw.textbbox((0, 0), label, font=font_small)
@@ -241,11 +283,11 @@ def draw_light_group(
     y: int,
     width: int,
 ) -> tuple[int, list[TouchZone]]:
-    """Draw lights as single toggle buttons — always half-width, two per row.
+    """Draw lights as single toggle buttons -- always half-width, two per row.
 
     Returns (new_y, list of TouchZones).
     """
-    zones = []
+    zones: list[TouchZone] = []
     btn_gap = 8
     btn_w = (width - btn_gap) // 2
     i = 0
@@ -264,7 +306,7 @@ def draw_light_group(
             y = max(y1, y2)
             i += 2
         else:
-            # Single button — same half-width size
+            # Single button -- same half-width size
             y, zone = draw_light_button(
                 draw, room_lights[i]["name"], room_lights[i]["is_on"],
                 room_lights[i]["id"], x, y, btn_w,
@@ -281,9 +323,8 @@ def draw_weather(
     y: int,
     width: int,
 ) -> int:
-    """Draw weather info: icon + temperature + high/low/rain details.
+    """Draw weather info: icon + large temperature + condition + details.
 
-    The icon is ~40x40 pixels drawn with Pillow shapes based on condition_code.
     Returns the y position below the weather section.
     """
     code = weather.get("condition_code", 0)
@@ -298,20 +339,23 @@ def draw_weather(
 
     _draw_weather_icon(draw, code, icon_x, icon_y, icon_size)
 
-    # Temperature next to icon
+    # Temperature in display font (large) next to icon
     temp_text = f"{temp:.0f}\u00b0C"
     text_x = icon_x + icon_size + 12
-    draw.text((text_x, icon_y), temp_text, fill=FG, font=font_heading)
+    draw.text((text_x, icon_y), temp_text, fill=FG, font=font_display)
 
-    # Condition text below temperature
+    # Condition text below temperature in small font
     condition = weather.get("condition_text", "")
-    cond_bbox = draw.textbbox((0, 0), condition, font=font_small)
-    cond_h = cond_bbox[3] - cond_bbox[1]
-    heading_bbox = draw.textbbox((0, 0), temp_text, font=font_heading)
+    heading_bbox = draw.textbbox((0, 0), temp_text, font=font_display)
     heading_h = heading_bbox[3] - heading_bbox[1]
-    draw.text((text_x, icon_y + heading_h + 4), condition, fill=GRAY_MID, font=font_small)
+    draw.text(
+        (text_x, icon_y + heading_h + 4),
+        condition,
+        fill=GRAY_MID,
+        font=font_small,
+    )
 
-    # High/Low and Rain line below the icon area
+    # High/Low and Rain details below the icon area
     detail_y = icon_y + icon_size + 10
     detail_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0   Rain: {rain}%"
     draw.text((x, detail_y), detail_text, fill=FG, font=font_small)
@@ -331,14 +375,13 @@ def _draw_weather_icon(
 ) -> None:
     """Draw a weather icon using Pillow shapes based on WMO condition code."""
     if code == 0:
-        # Clear: circle (sun)
+        # Clear: circle (sun) with rays
         margin = 4
         draw.ellipse(
             [x + margin, y + margin, x + size - margin, y + size - margin],
             outline=FG,
             width=2,
         )
-        # Sun rays: short lines radiating from center
         cx = x + size // 2
         cy = y + size // 2
         r_inner = size // 2 - margin
@@ -352,16 +395,14 @@ def _draw_weather_icon(
             draw.line([(x1, y1), (x2, y2)], fill=FG, width=1)
 
     elif 1 <= code <= 3:
-        # Cloudy: cloud shape using overlapping ellipses
+        # Cloudy
         _draw_cloud(draw, x, y, size)
 
     elif 45 <= code <= 48:
         # Fog: horizontal parallel lines
         line_y = y + 8
-        for i in range(4):
-            lx1 = x + 4
-            lx2 = x + size - 4
-            draw.line([(lx1, line_y), (lx2, line_y)], fill=FG, width=2)
+        for _i in range(4):
+            draw.line([(x + 4, line_y), (x + size - 4, line_y)], fill=FG, width=2)
             line_y += 8
 
     elif (51 <= code <= 67) or (80 <= code <= 82):
@@ -395,7 +436,7 @@ def _draw_weather_icon(
 
     else:
         # Unknown: question mark
-        draw.text((x + 8, y + 4), "?", fill=FG, font=font_heading)
+        draw.text((x + 8, y + 4), "?", fill=FG, font=font_display)
 
 
 def _draw_cloud(
@@ -425,8 +466,11 @@ def draw_vertical_divider(
     y_start: int,
     y_end: int,
 ) -> None:
-    """Draw a thin vertical line separating the two panels."""
-    draw.line([(x, y_start), (x, y_end)], fill=GRAY_LIGHT, width=1)
+    """Draw a vertical divider separating the two panels.
+
+    Uses GRAY_DARK and width=2 for stronger e-ink presence.
+    """
+    draw.line([(x, y_start), (x, y_end)], fill=GRAY_DARK, width=2)
 
 
 def draw_footer(
@@ -436,10 +480,10 @@ def draw_footer(
     y: int,
     width: int,
 ) -> int:
-    """Draw 'Last updated: {timestamp}' in SMALL font, GRAY_MID, left-aligned."""
-    text = f"Last updated: {timestamp}"
+    """Draw a subtle timestamp in tiny text, bottom-left."""
+    text = timestamp
     draw.text((x, y), text, fill=GRAY_MID, font=font_small)
     bbox = draw.textbbox((0, 0), text, font=font_small)
-    text_height = bbox[3] - bbox[1]
-    y += text_height + PADDING
+    text_h = bbox[3] - bbox[1]
+    y += text_h + PADDING
     return y

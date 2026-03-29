@@ -113,8 +113,8 @@ class RenderEngine:
                     width=left_width,
                 )
 
-        # Footer at the bottom of the left panel
-        footer_y = max(ly + SECTION_GAP, self.height - 50)
+        # Subtle time-only footer at the bottom of the left panel
+        footer_y = max(ly + SECTION_GAP, self.height - 44)
         draw_footer(draw, current_time, left_x, footer_y, left_width)
 
         # ============================================================
@@ -150,7 +150,7 @@ class RenderEngine:
         # ============================================================
         draw_vertical_divider(draw, DIVIDER_X, header_bottom, self.height - PADDING)
 
-        # Rotate 90° clockwise for portrait framebuffer display.
+        # Rotate 90 degrees clockwise for portrait framebuffer display.
         # The Kindle screen is physically 758x1024 portrait, so we render
         # landscape (1024x758) then rotate to fit.
         img_rotated = img.rotate(-90, expand=True)
