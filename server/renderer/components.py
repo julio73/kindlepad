@@ -413,11 +413,23 @@ def _draw_weather_icon(
         _draw_cloud(draw, x, y + size // 6, size)
 
     elif 45 <= code <= 48:
-        # Fog: horizontal dashed lines
+        # Fog: wavy horizontal lines
         bar_y = y + size // 4
-        for _i in range(4):
-            draw.line([(x + 4, bar_y), (x + size - 4, bar_y)], fill=FG, width=W)
-            bar_y += 10
+        for i in range(4):
+            # Alternate wave direction per line
+            wave_amp = 3
+            points = []
+            left = x + 4
+            right = x + size - 4
+            steps = 12
+            for s in range(steps + 1):
+                px = left + (right - left) * s // steps
+                offset = wave_amp * math.sin(s * math.pi / 3)
+                if i % 2 == 1:
+                    offset = -offset
+                points.append((px, bar_y + offset))
+            draw.line(points, fill=FG, width=W)
+            bar_y += 12
 
     elif 51 <= code <= 57:
         # Drizzle: cloud + short thin drops
@@ -464,18 +476,38 @@ def _draw_cloud(
     y: int,
     size: int,
 ) -> None:
-    """Draw a cloud using thick outlined overlapping ellipses."""
+    """Draw a cloud with flat bottom, two top bumps, smooth curves."""
     W = 3
-    # Main body
-    body_top = y + size * 2 // 5
-    body_bot = y + size * 3 // 4
-    draw.ellipse([x, body_top, x + size, body_bot + 4], outline=FG, width=W)
-    # Left bump
-    draw.ellipse([x + 4, body_top - size // 5, x + size * 9 // 20, body_top + size // 8],
-                 outline=FG, width=W)
-    # Top bump (taller)
-    draw.ellipse([x + size // 4, y + size // 8, x + size * 3 // 4, body_top + size // 10],
-                 outline=FG, width=W)
+    # Key positions
+    base_y = y + size * 3 // 4       # flat bottom line
+    left_x = x + size // 8           # left edge
+    right_x = x + size * 7 // 8      # right edge
+
+    # Flat bottom
+    draw.line([(left_x, base_y), (right_x, base_y)], fill=FG, width=W)
+
+    # Left side curve (3/4 circle, open on the right)
+    left_r = size // 5
+    draw.arc([left_x - left_r, base_y - left_r * 2, left_x + left_r, base_y],
+             start=90, end=360, fill=FG, width=W)
+
+    # Left/small top bump
+    bump1_cx = x + size * 3 // 10
+    bump1_r = size // 4
+    draw.arc([bump1_cx - bump1_r, base_y - bump1_r * 3, bump1_cx + bump1_r, base_y - bump1_r],
+             start=155, end=335, fill=FG, width=W)
+
+    # Main/large top bump (the dominant cloud curve)
+    bump2_cx = x + size * 3 // 5
+    bump2_r = size // 3
+    bump2_top = y + size // 10
+    draw.arc([bump2_cx - bump2_r, bump2_top, bump2_cx + bump2_r, bump2_top + bump2_r * 2],
+             start=180, end=360, fill=FG, width=W)
+
+    # Right side curve (3/4 circle, open on the left)
+    right_r = size // 5
+    draw.arc([right_x - right_r, base_y - right_r * 2, right_x + right_r, base_y],
+             start=180, end=90, fill=FG, width=W)
 
 
 def draw_vertical_divider(
