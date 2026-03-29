@@ -145,9 +145,20 @@ class RenderEngine:
         # ============================================================
         draw_vertical_divider(draw, DIVIDER_X, header_bottom, self.height - PADDING)
 
+        # Rotate 90° clockwise for portrait framebuffer display.
+        # The Kindle screen is physically 758x1024 portrait, so we render
+        # landscape (1024x758) then rotate to fit.
+        img_rotated = img.rotate(-90, expand=True)
+
         # Encode to PNG
         buf = BytesIO()
-        img.save(buf, format="PNG")
+        img_rotated.save(buf, format="PNG")
         png_bytes = buf.getvalue()
+
+        # Touch coordinates from the Kindle will be in the rotated (portrait)
+        # coordinate space. We need to map them back to our landscape layout.
+        # Rotated image is 758x1024. A tap at (rx, ry) in rotated space
+        # maps to (ry, 758 - rx) in our landscape layout.
+        touchmap._rotation = (self.width, self.height)
 
         return png_bytes, touchmap

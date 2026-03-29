@@ -55,7 +55,7 @@ class TestRenderLandscapeDimensions:
         )
 
         img = Image.open(io.BytesIO(png_bytes))
-        assert img.size == (1024, 758)
+        assert img.size == (758, 1024)
         assert img.mode == "L"
 
 
@@ -74,7 +74,7 @@ class TestRenderWithEmptyData:
         assert isinstance(png_bytes, bytes)
         assert png_bytes[:4] == PNG_MAGIC
         img = Image.open(io.BytesIO(png_bytes))
-        assert img.size == (1024, 758)
+        assert img.size == (758, 1024)
 
 
 class TestRenderTouchZones:
@@ -112,5 +112,5 @@ class TestRenderWithDepartures:
         assert isinstance(png_bytes, bytes)
         assert png_bytes[:4] == PNG_MAGIC
         img = Image.open(io.BytesIO(png_bytes))
-        assert img.size == (1024, 758)
+        assert img.size == (758, 1024)
         assert img.mode == "L"
