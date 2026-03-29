@@ -217,10 +217,11 @@ def draw_room_header(
     Returns the y position below the label.
     """
     label = room_name.upper()
+    y += 10  # breathing room above
     draw.text((x, y), label, fill=FG, font=font_small)
     bbox = draw.textbbox((0, 0), label, font=font_small)
     text_h = bbox[3] - bbox[1]
-    y += text_h + 6
+    y += text_h + 10
     return y
 
 
