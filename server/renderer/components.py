@@ -185,47 +185,51 @@ def draw_room_header(
     return y
 
 
-def draw_light_inline(
+def draw_light_button(
     draw: ImageDraw.ImageDraw,
     name: str,
     is_on: bool,
     device_id: str,
     x: int,
     y: int,
-    cell_width: int,
-) -> TouchZone:
-    """Draw a single inline light toggle: 'Name ■ ON' or 'Name □ OFF'.
+    width: int,
+) -> tuple[int, TouchZone]:
+    """Draw a single button for a light: filled=ON, outlined=OFF. Tap to toggle.
 
-    Tap target covers the whole cell. Returns a TouchZone.
+    Shows: [  Lamp 1  ON  ] (filled) or [  Lamp 2  OFF  ] (outlined)
+    Returns (new_y, TouchZone).
     """
-    state_text = "ON" if is_on else "OFF"
-    state_color = FG if is_on else GRAY_MID
-    sq_size = 12
-    sq_y = y + 6
+    btn_height = 42
+    label = f"{name}  {'ON' if is_on else 'OFF'}"
 
-    # Name
-    draw.text((x + 4, y), name, fill=FG, font=font_small)
-    name_bbox = draw.textbbox((0, 0), name, font=font_small)
-    name_w = name_bbox[2] - name_bbox[0]
-    cx = x + 4 + name_w + 8
-
-    # Square indicator
     if is_on:
-        draw.rectangle([cx, sq_y, cx + sq_size, sq_y + sq_size], fill=FG)
+        draw.rectangle([x, y, x + width, y + btn_height], fill=FG)
+        text_color = 255
     else:
-        draw.rectangle([cx, sq_y, cx + sq_size, sq_y + sq_size], fill=255, outline=FG, width=1)
+        draw.rectangle([x, y, x + width, y + btn_height], fill=255, outline=FG, width=1)
+        text_color = FG
 
-    # ON/OFF text
-    draw.text((cx + sq_size + 5, y), state_text, fill=state_color, font=font_small)
+    lbl_bbox = draw.textbbox((0, 0), label, font=font_small)
+    lw = lbl_bbox[2] - lbl_bbox[0]
+    lh = lbl_bbox[3] - lbl_bbox[1]
+    draw.text(
+        (x + (width - lw) // 2, y + (btn_height - lh) // 2),
+        label,
+        fill=text_color,
+        font=font_small,
+    )
 
-    return TouchZone(
+    zone = TouchZone(
         x=x,
         y=y,
-        width=cell_width,
-        height=ROW_HEIGHT,
+        width=width,
+        height=btn_height,
         action="toggle_light",
         params={"device_id": device_id},
     )
+
+    y += btn_height + 8
+    return y, zone
 
 
 def draw_light_group(
@@ -235,35 +239,36 @@ def draw_light_group(
     y: int,
     width: int,
 ) -> tuple[int, list[TouchZone]]:
-    """Draw lights inline — two per row if multiple in a room, one per row otherwise.
+    """Draw lights as single toggle buttons — two per row if in same room.
 
     Returns (new_y, list of TouchZones).
     """
     zones = []
+    btn_gap = 8
     i = 0
     while i < len(room_lights):
         if i + 1 < len(room_lights):
-            # Two lights on one row
-            cell_w = width // 2
-            zone1 = draw_light_inline(
+            # Two buttons side by side
+            btn_w = (width - btn_gap) // 2
+            y1, zone1 = draw_light_button(
                 draw, room_lights[i]["name"], room_lights[i]["is_on"],
-                room_lights[i]["id"], x, y, cell_w,
+                room_lights[i]["id"], x, y, btn_w,
             )
-            zone2 = draw_light_inline(
+            y2, zone2 = draw_light_button(
                 draw, room_lights[i + 1]["name"], room_lights[i + 1]["is_on"],
-                room_lights[i + 1]["id"], x + cell_w, y, cell_w,
+                room_lights[i + 1]["id"], x + btn_w + btn_gap, y, btn_w,
             )
             zones.extend([zone1, zone2])
+            y = max(y1, y2)
             i += 2
         else:
-            # Single light on its own row
-            zone = draw_light_inline(
+            # Single button full width
+            y, zone = draw_light_button(
                 draw, room_lights[i]["name"], room_lights[i]["is_on"],
                 room_lights[i]["id"], x, y, width,
             )
             zones.append(zone)
             i += 1
-        y += ROW_HEIGHT
     return y, zones
 
 
