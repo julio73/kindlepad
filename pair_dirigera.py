@@ -2,7 +2,7 @@
 
 from dirigera.hub.auth import random_code, send_challenge, get_token, ALPHABET, CODE_LENGTH
 
-HUB_IP = "YOUR_HUB_IP"
+HUB_IP = input("Enter your Dirigera hub IP: ").strip()
 
 print(f"Pairing with Dirigera hub at {HUB_IP}...")
 code_verifier = random_code(ALPHABET, CODE_LENGTH)

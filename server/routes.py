@@ -113,6 +113,8 @@ async def get_screen(request: Request) -> Response:
         except Exception:
             weather = None
 
+    station_name = config.tfl.stations[0].display_name if config.tfl.stations else None
+
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
         tfl_statuses=tfl_statuses,
@@ -121,6 +123,7 @@ async def get_screen(request: Request) -> Response:
         current_date=current_date,
         weather=weather,
         battery_pct=battery_pct,
+        station_name=station_name,
     )
 
     # Store latest touchmap for touch resolution

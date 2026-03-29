@@ -41,6 +41,7 @@ class RenderEngine:
         current_date: str,
         weather: Optional[dict] = None,
         battery_pct: Optional[int] = None,
+        station_name: Optional[str] = None,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -85,9 +86,10 @@ class RenderEngine:
 
         # Departures section
         if departures:
-            ly = draw_section_header(
-                draw, "NEXT TRAINS \u00b7 Your Station", left_x, ly
-            )
+            header_label = "NEXT TRAINS"
+            if station_name:
+                header_label += f" \u00b7 {station_name}"
+            ly = draw_section_header(draw, header_label, left_x, ly)
             for dep in departures[:5]:
                 ly = draw_departure_row(
                     draw,
