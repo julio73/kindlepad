@@ -239,17 +239,17 @@ def draw_light_group(
     y: int,
     width: int,
 ) -> tuple[int, list[TouchZone]]:
-    """Draw lights as single toggle buttons — two per row if in same room.
+    """Draw lights as single toggle buttons — always half-width, two per row.
 
     Returns (new_y, list of TouchZones).
     """
     zones = []
     btn_gap = 8
+    btn_w = (width - btn_gap) // 2
     i = 0
     while i < len(room_lights):
         if i + 1 < len(room_lights):
             # Two buttons side by side
-            btn_w = (width - btn_gap) // 2
             y1, zone1 = draw_light_button(
                 draw, room_lights[i]["name"], room_lights[i]["is_on"],
                 room_lights[i]["id"], x, y, btn_w,
@@ -262,10 +262,10 @@ def draw_light_group(
             y = max(y1, y2)
             i += 2
         else:
-            # Single button full width
+            # Single button — same half-width size
             y, zone = draw_light_button(
                 draw, room_lights[i]["name"], room_lights[i]["is_on"],
-                room_lights[i]["id"], x, y, width,
+                room_lights[i]["id"], x, y, btn_w,
             )
             zones.append(zone)
             i += 1
