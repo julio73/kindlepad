@@ -26,7 +26,7 @@ async def get_screen(request: Request) -> Response:
     dirigera_client = request.app.state.dirigera_client
     config = request.app.state.config
 
-    now = datetime.now(timezone.utc).strftime("%H:%M")
+    now = datetime.now().strftime("%H:%M")
     current_date = datetime.now().strftime("%a %d %b")
 
     # Build a mapping of device id -> room from config

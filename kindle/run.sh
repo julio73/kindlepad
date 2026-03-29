@@ -75,7 +75,7 @@ send_touch() {
 NIGHT_START=19  # 7pm
 NIGHT_END=7     # 7am
 NIGHT_BRIGHTNESS=512  # low brightness for night touch
-BACKLIGHT_TIMEOUT=30  # seconds before auto-dim
+BACKLIGHT_TIMEOUT=120  # seconds before auto-dim (2 minutes)
 BACKLIGHT_OFF_TIME=0  # timestamp when backlight should turn off
 
 is_nighttime() {
@@ -90,12 +90,9 @@ set_backlight() {
 }
 
 handle_auto_brightness() {
-    # Called on each touch. At night: turn on briefly. During day: stay off.
-    if is_nighttime; then
-        set_backlight "$NIGHT_BRIGHTNESS"
-        BACKLIGHT_OFF_TIME=$(($(date +%s) + BACKLIGHT_TIMEOUT))
-        log "INFO" "Night touch: backlight on for ${BACKLIGHT_TIMEOUT}s"
-    fi
+    # Called on each touch. Turn on backlight briefly, auto-off after timeout.
+    set_backlight "$NIGHT_BRIGHTNESS"
+    BACKLIGHT_OFF_TIME=$(($(date +%s) + BACKLIGHT_TIMEOUT))
 }
 
 check_backlight_timeout() {
