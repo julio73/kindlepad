@@ -1,7 +1,8 @@
-"""Render engine: composites the full dashboard image."""
+"""Render engine: composites the full two-panel landscape dashboard image."""
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from io import BytesIO
 
 from PIL import Image, ImageDraw
@@ -10,17 +11,20 @@ from server.config import ScreenConfig
 from server.touchmap import TouchMap
 
 from .components import (
+    draw_departure_row,
     draw_footer,
     draw_header,
-    draw_light_toggle,
+    draw_light_row,
+    draw_room_header,
     draw_section_header,
     draw_tfl_row,
+    draw_vertical_divider,
 )
-from .theme import BG, PADDING, SECTION_GAP
+from .theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
 
 
 class RenderEngine:
-    """Renders the KindlePad dashboard as a grayscale PNG."""
+    """Renders the KindlePad dashboard as a 1024x758 grayscale PNG."""
 
     def __init__(self, screen: ScreenConfig):
         self.width = screen.width
@@ -30,49 +34,116 @@ class RenderEngine:
         self,
         lights: list[dict],
         tfl_statuses: list[dict],
+        departures: list[dict],
         current_time: str,
+        current_date: str,
     ) -> tuple[bytes, TouchMap]:
-        """Render the full dashboard and return (png_bytes, touchmap)."""
+        """Render the full two-panel dashboard and return (png_bytes, touchmap).
+
+        Parameters
+        ----------
+        lights:
+            List of dicts with keys: id, name, is_on, room.
+        tfl_statuses:
+            List of dicts with keys: name, status_text, severity.
+        departures:
+            List of dicts with keys: minutes, destination, direction.
+        current_time:
+            Formatted time string, e.g. "04:35".
+        current_date:
+            Formatted date string, e.g. "Sat 29 Mar".
+        """
         img = Image.new("L", (self.width, self.height), BG)
         draw = ImageDraw.Draw(img)
         touchmap = TouchMap()
 
         y = PADDING
 
-        # Header
-        y = draw_header(draw, "KindlePad", current_time, y)
+        # --- Header (full width) ---
+        y = draw_header(
+            draw, "KindlePad", current_time, current_date, self.width, y
+        )
+        header_bottom = y
 
-        # TfL section
+        # --- Panel geometry ---
+        left_x = PADDING
+        left_width = DIVIDER_X - PANEL_GAP - PADDING
+        right_x = DIVIDER_X + PANEL_GAP
+        right_width = self.width - PADDING - right_x
+
+        # ============================================================
+        # LEFT PANEL: Transit
+        # ============================================================
+        ly = header_bottom
+
+        # Departures section
+        if departures:
+            ly = draw_section_header(
+                draw, "NEXT TRAINS \u00b7 Your Station", left_x, ly
+            )
+            for dep in departures[:5]:
+                ly = draw_departure_row(
+                    draw,
+                    minutes=dep["minutes"],
+                    destination=dep["destination"],
+                    direction=dep["direction"],
+                    x=left_x,
+                    y=ly,
+                    width=left_width,
+                )
+            ly += SECTION_GAP
+
+        # TfL line status section
         if tfl_statuses:
-            y += SECTION_GAP
-            y = draw_section_header(draw, "TfL Status", y)
+            ly = draw_section_header(draw, "LINE STATUS", left_x, ly)
             for status in tfl_statuses:
-                y = draw_tfl_row(
+                ly = draw_tfl_row(
                     draw,
                     line_name=status["name"],
                     status_text=status["status_text"],
                     severity=status["severity"],
-                    y=y,
+                    x=left_x,
+                    y=ly,
+                    width=left_width,
                 )
 
-        # Lights section
+        # Footer at the bottom of the left panel
+        footer_y = max(ly + SECTION_GAP, self.height - 50)
+        draw_footer(draw, current_time, left_x, footer_y, left_width)
+
+        # ============================================================
+        # RIGHT PANEL: Lights
+        # ============================================================
+        ry = header_bottom
+
         if lights:
-            y += SECTION_GAP
-            y = draw_section_header(draw, "Lights", y)
-            for light in lights:
-                y, zones = draw_light_toggle(
-                    draw,
-                    name=light["name"],
-                    is_on=light["is_on"],
-                    device_id=light["id"],
-                    y=y,
-                )
-                for zone in zones:
-                    touchmap.add(zone)
+            ry = draw_section_header(draw, "LIGHTS", right_x, ry)
 
-        # Footer
-        footer_y = max(y + SECTION_GAP, self.height - 80)
-        draw_footer(draw, current_time, footer_y)
+            # Group lights by room, preserving insertion order
+            rooms: OrderedDict[str, list[dict]] = OrderedDict()
+            for light in lights:
+                room = light.get("room", "Other")
+                rooms.setdefault(room, []).append(light)
+
+            for room_name, room_lights in rooms.items():
+                ry = draw_room_header(draw, room_name, right_x, ry)
+                for light in room_lights:
+                    ry, zone = draw_light_row(
+                        draw,
+                        name=light["name"],
+                        is_on=light["is_on"],
+                        device_id=light["id"],
+                        x=right_x,
+                        y=ry,
+                        width=right_width,
+                    )
+                    touchmap.add(zone)
+                ry += SECTION_GAP // 2
+
+        # ============================================================
+        # Vertical divider
+        # ============================================================
+        draw_vertical_divider(draw, DIVIDER_X, header_bottom, self.height - PADDING)
 
         # Encode to PNG
         buf = BytesIO()

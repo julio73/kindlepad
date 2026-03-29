@@ -27,6 +27,12 @@ async def get_screen(request: Request) -> Response:
     config = request.app.state.config
 
     now = datetime.now(timezone.utc).strftime("%H:%M")
+    current_date = datetime.now().strftime("%a %d %b")
+
+    # Build a mapping of device id -> room from config
+    device_room_map: dict[str, str] = {
+        d.id: d.room for d in config.dirigera.devices
+    }
 
     # Fetch TfL statuses
     tfl_statuses: list[dict] = []
@@ -40,14 +46,36 @@ async def get_screen(request: Request) -> Response:
         except Exception:
             tfl_statuses = []
 
+    # Fetch TfL departures
+    departures: list[dict] = []
+    if tfl_client is not None and config.tfl.stations:
+        try:
+            naptan_id = config.tfl.stations[0].naptan_id
+            deps = await tfl_client.get_departures(naptan_id)
+            departures = [
+                {
+                    "minutes": d.minutes,
+                    "destination": d.destination,
+                    "direction": d.direction,
+                }
+                for d in deps
+            ]
+        except Exception:
+            departures = []
+
     # Fetch light states
     lights: list[dict] = []
     if dirigera_client is not None:
         try:
             light_states = dirigera_client.get_lights()
             lights = [
-                {"id": l.id, "name": l.name, "is_on": l.is_on}
-                for l in light_states
+                {
+                    "id": lt.id,
+                    "name": lt.name,
+                    "is_on": lt.is_on,
+                    "room": device_room_map.get(lt.id, ""),
+                }
+                for lt in light_states
             ]
         except Exception:
             lights = []
@@ -55,12 +83,23 @@ async def get_screen(request: Request) -> Response:
     # Fall back to config-defined devices as mock data if no live data
     if not lights and config.dirigera.devices:
         lights = [
-            {"id": d.id, "name": d.name, "is_on": False}
+            {
+                "id": d.id,
+                "name": d.name,
+                "is_on": False,
+                "room": d.room,
+            }
             for d in config.dirigera.devices
             if d.type == "light"
         ]
 
-    png_bytes, touchmap = engine.render_dashboard(lights, tfl_statuses, now)
+    png_bytes, touchmap = engine.render_dashboard(
+        lights=lights,
+        tfl_statuses=tfl_statuses,
+        departures=departures,
+        current_time=now,
+        current_date=current_date,
+    )
 
     # Store latest touchmap for touch resolution
     request.app.state.touchmap = touchmap
@@ -88,6 +127,14 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         device_id = zone.params.get("device_id", "")
         try:
             dirigera_client.set_on(device_id, target_state)
+            refresh = True
+        except Exception:
+            pass
+
+    if zone.action == "toggle_light" and dirigera_client is not None:
+        device_id = zone.params.get("device_id", "")
+        try:
+            dirigera_client.toggle(device_id)
             refresh = True
         except Exception:
             pass

@@ -43,7 +43,7 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
     try:
         from server.integrations.tfl_client import TflClient
 
-        if config.tfl.lines:
+        if config.tfl.lines or config.tfl.stations:
             lines = [{"id": l.id, "display_name": l.display_name} for l in config.tfl.lines]
             tfl_client = TflClient(
                 lines=lines,

@@ -1,4 +1,4 @@
-"""Drawing components for the KindlePad dashboard."""
+"""Drawing components for the KindlePad two-panel landscape dashboard."""
 
 from __future__ import annotations
 
@@ -7,49 +7,132 @@ from PIL import ImageDraw
 from server.touchmap import TouchZone
 
 from .theme import (
-    BG,
     FG,
+    GRAY_LIGHT,
     GRAY_MID,
     PADDING,
     ROW_HEIGHT,
     SECTION_GAP,
     font_body,
     font_heading,
+    font_label,
     font_small,
 )
 
-# Screen width will be set by the engine before rendering.
-SCREEN_WIDTH = 758
 
+def draw_header(
+    draw: ImageDraw.ImageDraw,
+    title: str,
+    time_str: str,
+    date_str: str,
+    width: int,
+    y: int,
+) -> int:
+    """Draw title left-aligned, date+time right-aligned, then a separator line.
 
-def draw_header(draw: ImageDraw.ImageDraw, title: str, time_str: str, y: int) -> int:
-    """Draw title left-aligned, time right-aligned, then a separator line."""
-    # Title on the left
+    Returns the y position below the separator.
+    """
     draw.text((PADDING, y), title, fill=FG, font=font_heading)
 
-    # Time on the right
-    time_bbox = draw.textbbox((0, 0), time_str, font=font_heading)
-    time_width = time_bbox[2] - time_bbox[0]
-    draw.text((SCREEN_WIDTH - PADDING - time_width, y), time_str, fill=FG, font=font_heading)
+    # Right side: "Sat 29 Mar  04:35"
+    right_text = f"{date_str}  {time_str}"
+    rt_bbox = draw.textbbox((0, 0), right_text, font=font_heading)
+    rt_width = rt_bbox[2] - rt_bbox[0]
+    draw.text(
+        (width - PADDING - rt_width, y),
+        right_text,
+        fill=FG,
+        font=font_heading,
+    )
 
-    # Advance past the text
+    # Advance past text
     title_bbox = draw.textbbox((0, 0), title, font=font_heading)
     text_height = title_bbox[3] - title_bbox[1]
-    y += text_height + 16
+    y += text_height + 12
 
-    # Separator line
-    draw.line([(PADDING, y), (SCREEN_WIDTH - PADDING, y)], fill=FG, width=2)
+    # Full-width separator
+    draw.line([(PADDING, y), (width - PADDING, y)], fill=FG, width=2)
     y += SECTION_GAP
 
     return y
 
 
-def draw_section_header(draw: ImageDraw.ImageDraw, label: str, y: int) -> int:
-    """Draw a section label in BODY font."""
-    draw.text((PADDING, y), label, fill=FG, font=font_body)
+def draw_section_header(
+    draw: ImageDraw.ImageDraw,
+    label: str,
+    x: int,
+    y: int,
+) -> int:
+    """Draw a section label (e.g. 'NEXT TRAINS ...', 'LIGHTS').
+
+    Returns the y position below the label.
+    """
+    draw.text((x, y), label, fill=FG, font=font_body)
     bbox = draw.textbbox((0, 0), label, font=font_body)
     text_height = bbox[3] - bbox[1]
-    y += text_height + 12
+    y += text_height + 6
+
+    # Thin underline
+    draw.line([(x, y), (x + 200, y)], fill=GRAY_LIGHT, width=1)
+    y += SECTION_GAP
+
+    return y
+
+
+def draw_departure_row(
+    draw: ImageDraw.ImageDraw,
+    minutes: int,
+    destination: str,
+    direction: str,
+    x: int,
+    y: int,
+    width: int,
+) -> int:
+    """Draw a departure row: '2 min   Northtown       Eastbound'.
+
+    Minutes left-aligned in bold (heading font), 'min' suffix in small gray,
+    destination in body font, direction right-aligned in gray.
+
+    Returns the y position below the row.
+    """
+    # Minutes number (bold via heading font)
+    if minutes == 0:
+        min_num = "Due"
+        draw.text((x, y), min_num, fill=FG, font=font_heading)
+        num_bbox = draw.textbbox((0, 0), min_num, font=font_heading)
+        num_width = num_bbox[2] - num_bbox[0]
+    else:
+        min_num = str(minutes)
+        draw.text((x, y), min_num, fill=FG, font=font_heading)
+        num_bbox = draw.textbbox((0, 0), min_num, font=font_heading)
+        num_width = num_bbox[2] - num_bbox[0]
+
+        # "min" suffix in small gray text
+        min_suffix = " min"
+        # Vertically align the small text with the baseline
+        suffix_y = y + 4  # slight offset to align baselines
+        draw.text(
+            (x + num_width, suffix_y),
+            min_suffix,
+            fill=GRAY_MID,
+            font=font_small,
+        )
+
+    # Destination in body font, offset from left
+    dest_x = x + 90
+    draw.text((dest_x, y), destination, fill=FG, font=font_body)
+
+    # Direction right-aligned within the panel width
+    dir_bbox = draw.textbbox((0, 0), direction, font=font_small)
+    dir_width = dir_bbox[2] - dir_bbox[0]
+    draw.text(
+        (x + width - dir_width, y + 2),
+        direction,
+        fill=GRAY_MID,
+        font=font_small,
+    )
+
+    y += ROW_HEIGHT
     return y
 
 
@@ -58,17 +141,23 @@ def draw_tfl_row(
     line_name: str,
     status_text: str,
     severity: int,
+    x: int,
     y: int,
+    width: int,
 ) -> int:
-    """Draw a TfL line status row: line name left, status right."""
+    """Draw a TfL line status row: line name left, status right.
+
+    severity 10 = good service (GRAY_MID), anything else = black (FG).
+    Returns the y position below the row.
+    """
     color = GRAY_MID if severity == 10 else FG
 
-    draw.text((PADDING + 10, y), line_name, fill=FG, font=font_body)
+    draw.text((x, y), line_name, fill=FG, font=font_body)
 
     status_bbox = draw.textbbox((0, 0), status_text, font=font_body)
     status_width = status_bbox[2] - status_bbox[0]
     draw.text(
-        (SCREEN_WIDTH - PADDING - status_width, y),
+        (x + width - status_width, y),
         status_text,
         fill=color,
         font=font_body,
@@ -78,124 +167,112 @@ def draw_tfl_row(
     return y
 
 
-def draw_light_toggle(
+def draw_room_header(
+    draw: ImageDraw.ImageDraw,
+    room_name: str,
+    x: int,
+    y: int,
+) -> int:
+    """Draw a small room group label, slightly indented.
+
+    Returns the y position below the label.
+    """
+    indent = 4
+    draw.text((x + indent, y), room_name, fill=GRAY_MID, font=font_label)
+    bbox = draw.textbbox((0, 0), room_name, font=font_label)
+    text_height = bbox[3] - bbox[1]
+    y += text_height + 6
+    return y
+
+
+def draw_light_row(
     draw: ImageDraw.ImageDraw,
     name: str,
     is_on: bool,
     device_id: str,
+    x: int,
     y: int,
-) -> tuple[int, list[TouchZone]]:
-    """Draw a light toggle with ON/OFF buttons side by side."""
-    BUTTON_WIDTH = 330
-    BUTTON_HEIGHT = 90
-    GAP = 12
+    width: int,
+) -> tuple[int, TouchZone]:
+    """Draw a light row: filled/empty circle + name + ON/OFF status.
 
-    # Device name
-    draw.text((PADDING, y), name, fill=FG, font=font_body)
-    name_bbox = draw.textbbox((0, 0), name, font=font_body)
-    name_height = name_bbox[3] - name_bbox[1]
-    y += name_height + 10
+    The full row is a tap target for toggling.
+    Returns (new_y, TouchZone).
+    """
+    circle_char = "\u25cf" if is_on else "\u25cb"  # filled or empty circle
+    state_text = "ON" if is_on else "OFF"
+    state_color = FG if is_on else GRAY_MID
 
-    # Button positions
-    on_x = PADDING
-    off_x = PADDING + BUTTON_WIDTH + GAP
-    btn_y = y
+    # Try drawing the circle character; fall back to a rectangle if the font
+    # cannot render it (bbox would be zero-width).
+    circle_bbox = draw.textbbox((0, 0), circle_char, font=font_body)
+    circle_width = circle_bbox[2] - circle_bbox[0]
 
-    # ON button
-    if is_on:
-        # Active: filled black with white text
-        draw.rectangle(
-            [on_x, btn_y, on_x + BUTTON_WIDTH, btn_y + BUTTON_HEIGHT],
-            fill=FG,
-        )
-        on_text_color = BG
+    if circle_width > 0:
+        draw.text((x, y), circle_char, fill=state_color, font=font_body)
+        text_x = x + circle_width + 8
     else:
-        # Inactive: white with black border
-        draw.rectangle(
-            [on_x, btn_y, on_x + BUTTON_WIDTH, btn_y + BUTTON_HEIGHT],
-            fill=BG,
-            outline=FG,
-            width=2,
-        )
-        on_text_color = FG
+        # Fallback: draw a small filled/empty rectangle
+        rect_size = 10
+        ry = y + 4
+        if is_on:
+            draw.rectangle([x, ry, x + rect_size, ry + rect_size], fill=FG)
+        else:
+            draw.rectangle(
+                [x, ry, x + rect_size, ry + rect_size],
+                fill=255,
+                outline=FG,
+                width=1,
+            )
+        text_x = x + rect_size + 8
 
-    on_label = "ON"
-    on_bbox = draw.textbbox((0, 0), on_label, font=font_body)
-    on_tw = on_bbox[2] - on_bbox[0]
-    on_th = on_bbox[3] - on_bbox[1]
+    # Light name
+    draw.text((text_x, y), name, fill=FG, font=font_body)
+
+    # State label right-aligned
+    st_bbox = draw.textbbox((0, 0), state_text, font=font_body)
+    st_width = st_bbox[2] - st_bbox[0]
     draw.text(
-        (on_x + (BUTTON_WIDTH - on_tw) // 2, btn_y + (BUTTON_HEIGHT - on_th) // 2),
-        on_label,
-        fill=on_text_color,
+        (x + width - st_width, y),
+        state_text,
+        fill=state_color,
         font=font_body,
     )
 
-    # OFF button
-    if not is_on:
-        # Active: filled black with white text
-        draw.rectangle(
-            [off_x, btn_y, off_x + BUTTON_WIDTH, btn_y + BUTTON_HEIGHT],
-            fill=FG,
-        )
-        off_text_color = BG
-    else:
-        # Inactive: white with black border
-        draw.rectangle(
-            [off_x, btn_y, off_x + BUTTON_WIDTH, btn_y + BUTTON_HEIGHT],
-            fill=BG,
-            outline=FG,
-            width=2,
-        )
-        off_text_color = FG
-
-    off_label = "OFF"
-    off_bbox = draw.textbbox((0, 0), off_label, font=font_body)
-    off_tw = off_bbox[2] - off_bbox[0]
-    off_th = off_bbox[3] - off_bbox[1]
-    draw.text(
-        (off_x + (BUTTON_WIDTH - off_tw) // 2, btn_y + (BUTTON_HEIGHT - off_th) // 2),
-        off_label,
-        fill=off_text_color,
-        font=font_body,
+    zone = TouchZone(
+        x=x,
+        y=y,
+        width=width,
+        height=ROW_HEIGHT,
+        action="toggle_light",
+        params={"device_id": device_id},
     )
 
-    # Touch zones
-    zones = [
-        TouchZone(
-            x=on_x,
-            y=btn_y,
-            width=BUTTON_WIDTH,
-            height=BUTTON_HEIGHT,
-            action="light_on",
-            params={"device_id": device_id},
-        ),
-        TouchZone(
-            x=off_x,
-            y=btn_y,
-            width=BUTTON_WIDTH,
-            height=BUTTON_HEIGHT,
-            action="light_off",
-            params={"device_id": device_id},
-        ),
-    ]
-
-    y = btn_y + BUTTON_HEIGHT + SECTION_GAP
-    return y, zones
+    y += ROW_HEIGHT
+    return y, zone
 
 
-def draw_footer(draw: ImageDraw.ImageDraw, timestamp: str, y: int) -> int:
-    """Draw 'Last updated: {timestamp}' at the bottom in SMALL font."""
+def draw_vertical_divider(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y_start: int,
+    y_end: int,
+) -> None:
+    """Draw a thin vertical line separating the two panels."""
+    draw.line([(x, y_start), (x, y_end)], fill=GRAY_LIGHT, width=1)
+
+
+def draw_footer(
+    draw: ImageDraw.ImageDraw,
+    timestamp: str,
+    x: int,
+    y: int,
+    width: int,
+) -> int:
+    """Draw 'Last updated: {timestamp}' in SMALL font, GRAY_MID, left-aligned."""
     text = f"Last updated: {timestamp}"
+    draw.text((x, y), text, fill=GRAY_MID, font=font_small)
     bbox = draw.textbbox((0, 0), text, font=font_small)
-    text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-
-    draw.text(
-        ((SCREEN_WIDTH - text_width) // 2, y),
-        text,
-        fill=GRAY_MID,
-        font=font_small,
-    )
-
     y += text_height + PADDING
     return y

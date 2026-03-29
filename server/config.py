@@ -15,14 +15,15 @@ class ServerConfig(BaseModel):
 
 
 class ScreenConfig(BaseModel):
-    width: int = 1072
-    height: int = 1448
+    width: int = 1024
+    height: int = 758
 
 
 class DeviceConfig(BaseModel):
     id: str
     name: str
     type: str = "light"
+    room: str = ""
 
 
 class DirigeraConfig(BaseModel):
@@ -36,8 +37,14 @@ class LineConfig(BaseModel):
     display_name: str
 
 
+class StationConfig(BaseModel):
+    naptan_id: str
+    display_name: str
+
+
 class TflConfig(BaseModel):
     lines: list[LineConfig] = []
+    stations: list[StationConfig] = []
     refresh_interval_seconds: int = 120
 
 

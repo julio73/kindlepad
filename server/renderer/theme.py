@@ -7,17 +7,17 @@ from typing import Union
 from PIL import ImageFont
 
 # --- Grayscale palette ---
-BG = 255
-FG = 0
+BG = 255  # white
+FG = 0    # black
 GRAY_LIGHT = 200
 GRAY_MID = 140
 GRAY_DARK = 80
 
-# --- Font sizes ---
-HEADING = 30
-BODY = 22
-SMALL = 17
-LABEL = 20
+# --- Font sizes (smaller for landscape, 212dpi) ---
+HEADING = 26
+BODY = 19
+SMALL = 14
+LABEL = 17
 
 # --- Font loading ---
 # Pillow 11+ supports ImageFont.load_default(size=N).
@@ -55,6 +55,10 @@ font_small = _load_font(SMALL)
 font_label = _load_font(LABEL)
 
 # --- Spacing ---
-PADDING = 28
-SECTION_GAP = 20
-ROW_HEIGHT = 50
+PADDING = 20
+SECTION_GAP = 14
+ROW_HEIGHT = 38
+
+# --- Two-panel layout ---
+DIVIDER_X = 614  # ~60% of 1024
+PANEL_GAP = 16

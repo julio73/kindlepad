@@ -4,26 +4,39 @@ server:
   token: "change-me-to-a-secure-token"
 
 screen:
-  width: 1072
-  height: 1448
+  width: 1024
+  height: 758
 
 dirigera:
   hub_ip: "192.168.1.100"
   token: "your-dirigera-hub-token"
   devices:
-    - id: "light-living-room"
-      name: "Living Room"
+    - id: "light-living-room-1"
+      name: "Lamp 1"
       type: "light"
-    - id: "light-bedroom"
-      name: "Bedroom"
+      room: "Living Room"
+    - id: "light-living-room-2"
+      name: "Lamp 2"
       type: "light"
+      room: "Living Room"
+    - id: "light-hallway"
+      name: "Hallway"
+      type: "light"
+      room: "Hallway"
+    - id: "light-stairwell"
+      name: "Stairwell"
+      type: "light"
+      room: "Stairwell"
 
 tfl:
-  refresh_interval_seconds: 120
   lines:
-    - id: "central"
-      display_name: "Central"
-    - id: "green-line"
-      display_name: "Green Line"
-    - id: "northern"
-      display_name: "Northern"
+    - id: "blue-line"
+      display_name: "Blue Line"
+    - id: "red-line"
+      display_name: "Red Line"
+    - id: "orange-line"
+      display_name: "Orange Line"
+  stations:
+    - naptan_id: "YOUR_NAPTAN_ID"
+      display_name: "Your Station"
+  refresh_interval_seconds: 60
