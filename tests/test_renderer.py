@@ -89,10 +89,11 @@ class TestRenderTouchZones:
             current_date="Sat 29 Mar",
         )
 
-        toggle_zones = [z for z in touchmap.zones if z.action == "toggle_light"]
-        assert len(toggle_zones) == len(MOCK_LIGHTS)
+        light_zones = [z for z in touchmap.zones if z.action in ("light_on", "light_off")]
+        # 2 zones per light (ON + OFF buttons)
+        assert len(light_zones) == len(MOCK_LIGHTS) * 2
 
-        zone_ids = {z.params.get("device_id") for z in toggle_zones}
+        zone_ids = {z.params.get("device_id") for z in light_zones}
         expected_ids = {light["id"] for light in MOCK_LIGHTS}
         assert zone_ids == expected_ids
 

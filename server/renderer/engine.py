@@ -130,7 +130,7 @@ class RenderEngine:
             for room_name, room_lights in rooms.items():
                 ry = draw_room_header(draw, room_name, right_x, ry)
                 for light in room_lights:
-                    ry, zone = draw_light_row(
+                    ry, zones = draw_light_row(
                         draw,
                         name=light["name"],
                         is_on=light["is_on"],
@@ -139,8 +139,8 @@ class RenderEngine:
                         y=ry,
                         width=right_width,
                     )
-                    touchmap.add(zone)
-                ry += SECTION_GAP // 2
+                    for zone in zones:
+                        touchmap.add(zone)
 
         # Brightness control at bottom of right panel
         bright_y = max(ry + SECTION_GAP, self.height - 80)

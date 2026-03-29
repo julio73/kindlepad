@@ -193,63 +193,61 @@ def draw_light_row(
     x: int,
     y: int,
     width: int,
-) -> tuple[int, TouchZone]:
-    """Draw a light row: filled/empty circle + name + ON/OFF status.
+) -> tuple[int, list[TouchZone]]:
+    """Draw a light as a label + ON/OFF button pair (like brightness bar).
 
-    The full row is a tap target for toggling.
-    Returns (new_y, TouchZone).
+    Returns (new_y, list of TouchZones).
     """
-    circle_char = "\u25cf" if is_on else "\u25cb"  # filled or empty circle
-    state_text = "ON" if is_on else "OFF"
-    state_color = FG if is_on else GRAY_MID
+    # Light name label
+    draw.text((x, y), name, fill=FG, font=font_small)
+    bbox = draw.textbbox((0, 0), name, font=font_small)
+    y += (bbox[3] - bbox[1]) + 6
 
-    # Try drawing the circle character; fall back to a rectangle if the font
-    # cannot render it (bbox would be zero-width).
-    circle_bbox = draw.textbbox((0, 0), circle_char, font=font_body)
-    circle_width = circle_bbox[2] - circle_bbox[0]
+    btn_gap = 8
+    btn_width = (width - btn_gap) // 2
+    btn_height = 36
+    zones = []
 
-    if circle_width > 0:
-        draw.text((x, y), circle_char, fill=state_color, font=font_body)
-        text_x = x + circle_width + 8
-    else:
-        # Fallback: draw a small filled/empty rectangle
-        rect_size = 10
-        ry = y + 4
-        if is_on:
-            draw.rectangle([x, ry, x + rect_size, ry + rect_size], fill=FG)
+    for i, (label, is_active) in enumerate([("ON", is_on), ("OFF", not is_on)]):
+        bx = x + i * (btn_width + btn_gap)
+
+        if is_active:
+            draw.rectangle(
+                [bx, y, bx + btn_width, y + btn_height],
+                fill=FG,
+            )
+            text_color = 255
         else:
             draw.rectangle(
-                [x, ry, x + rect_size, ry + rect_size],
+                [bx, y, bx + btn_width, y + btn_height],
                 fill=255,
                 outline=FG,
                 width=1,
             )
-        text_x = x + rect_size + 8
+            text_color = FG
 
-    # Light name
-    draw.text((text_x, y), name, fill=FG, font=font_body)
+        lbl_bbox = draw.textbbox((0, 0), label, font=font_small)
+        lw = lbl_bbox[2] - lbl_bbox[0]
+        lh = lbl_bbox[3] - lbl_bbox[1]
+        draw.text(
+            (bx + (btn_width - lw) // 2, y + (btn_height - lh) // 2),
+            label,
+            fill=text_color,
+            font=font_small,
+        )
 
-    # State label right-aligned
-    st_bbox = draw.textbbox((0, 0), state_text, font=font_body)
-    st_width = st_bbox[2] - st_bbox[0]
-    draw.text(
-        (x + width - st_width, y),
-        state_text,
-        fill=state_color,
-        font=font_body,
-    )
+        action = "light_on" if label == "ON" else "light_off"
+        zones.append(TouchZone(
+            x=bx,
+            y=y,
+            width=btn_width,
+            height=btn_height,
+            action=action,
+            params={"device_id": device_id},
+        ))
 
-    zone = TouchZone(
-        x=x,
-        y=y,
-        width=width,
-        height=ROW_HEIGHT,
-        action="toggle_light",
-        params={"device_id": device_id},
-    )
-
-    y += ROW_HEIGHT
-    return y, zone
+    y += btn_height + SECTION_GAP
+    return y, zones
 
 
 def draw_brightness_bar(
