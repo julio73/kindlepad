@@ -351,10 +351,7 @@ def draw_weather(
     temp_h = temp_bbox[3] - temp_bbox[1]
     temp_w = temp_bbox[2] - temp_bbox[0]
 
-    hl_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0"
-    draw.text((temp_x, y + temp_h + 6), hl_text, fill=GRAY_MID, font=font_small)
-
-    # Column 3: Condition (same size as temp) + rain (same gap as H/L)
+    # Column 3: Condition (same size as temp) + rain
     cond_x = temp_x + temp_w + 36
     draw.text((cond_x, y), condition, fill=FG, font=font_display)
     cond_bbox = draw.textbbox((0, 0), condition, font=font_display)
@@ -362,7 +359,12 @@ def draw_weather(
 
     rain_text = f"Rain: {rain}%"
     rain_color = FG if rain >= 50 else GRAY_MID
-    draw.text((cond_x, y + cond_h + 6), rain_text, fill=rain_color, font=font_small)
+    row2_y = y + cond_h + 6
+    draw.text((cond_x, row2_y), rain_text, fill=rain_color, font=font_small)
+
+    # Align H/L on same row as rain
+    hl_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0"
+    draw.text((temp_x, row2_y), hl_text, fill=GRAY_MID, font=font_small)
 
     y += max(icon_size, temp_h + 30) + SECTION_GAP
     return y
