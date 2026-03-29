@@ -10,14 +10,14 @@ from PIL import ImageFont
 BG = 255  # white
 FG = 0    # black
 GRAY_LIGHT = 200
-GRAY_MID = 140
+GRAY_MID = 120
 GRAY_DARK = 80
 
-# --- Font sizes (smaller for landscape, 212dpi) ---
-HEADING = 26
-BODY = 19
-SMALL = 14
-LABEL = 17
+# --- Font sizes (landscape, 212dpi, bold/readable on e-ink) ---
+HEADING = 36
+BODY = 26
+SMALL = 19
+LABEL = 22
 
 # --- Font loading ---
 # Pillow 11+ supports ImageFont.load_default(size=N).
@@ -55,9 +55,9 @@ font_small = _load_font(SMALL)
 font_label = _load_font(LABEL)
 
 # --- Spacing ---
-PADDING = 20
-SECTION_GAP = 14
-ROW_HEIGHT = 38
+PADDING = 24
+SECTION_GAP = 16
+ROW_HEIGHT = 48
 
 # --- Two-panel layout ---
 DIVIDER_X = 614  # ~60% of 1024
