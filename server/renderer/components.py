@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from PIL import ImageDraw
 
 from server.touchmap import TouchZone
@@ -272,73 +274,149 @@ def draw_light_group(
     return y, zones
 
 
-def draw_brightness_bar(
+def draw_weather(
     draw: ImageDraw.ImageDraw,
-    level: int,
+    weather: dict,
     x: int,
     y: int,
     width: int,
-) -> tuple[int, list[TouchZone]]:
-    """Draw brightness control: label + 4 tap zones (off, low, med, high).
+) -> int:
+    """Draw weather info: icon + temperature + high/low/rain details.
 
-    Returns (new_y, list of TouchZones).
+    The icon is ~40x40 pixels drawn with Pillow shapes based on condition_code.
+    Returns the y position below the weather section.
     """
-    # Label
-    draw.text((x, y), "Brightness", fill=GRAY_MID, font=font_small)
-    bbox = draw.textbbox((0, 0), "Brightness", font=font_small)
-    y += (bbox[3] - bbox[1]) + 8
+    code = weather.get("condition_code", 0)
+    temp = weather.get("temperature", 0)
+    high = weather.get("high", 0)
+    low = weather.get("low", 0)
+    rain = weather.get("rain_chance", 0)
 
-    levels = [
-        ("Off", 0),
-        ("Low", 1),
-        ("Med", 2),
-        ("High", 3),
-    ]
-    btn_gap = 8
-    btn_width = (width - btn_gap * (len(levels) - 1)) // len(levels)
-    btn_height = 36
-    zones = []
+    icon_size = 40
+    icon_x = x
+    icon_y = y
 
-    for i, (label, lvl) in enumerate(levels):
-        bx = x + i * (btn_width + btn_gap)
-        is_active = lvl == level
+    _draw_weather_icon(draw, code, icon_x, icon_y, icon_size)
 
-        if is_active:
-            draw.rectangle(
-                [bx, y, bx + btn_width, y + btn_height],
-                fill=FG,
-            )
-            text_color = 255  # white
-        else:
-            draw.rectangle(
-                [bx, y, bx + btn_width, y + btn_height],
-                fill=255,
-                outline=FG,
-                width=1,
-            )
-            text_color = FG
+    # Temperature next to icon
+    temp_text = f"{temp:.0f}\u00b0C"
+    text_x = icon_x + icon_size + 12
+    draw.text((text_x, icon_y), temp_text, fill=FG, font=font_heading)
 
-        lbl_bbox = draw.textbbox((0, 0), label, font=font_small)
-        lw = lbl_bbox[2] - lbl_bbox[0]
-        lh = lbl_bbox[3] - lbl_bbox[1]
-        draw.text(
-            (bx + (btn_width - lw) // 2, y + (btn_height - lh) // 2),
-            label,
-            fill=text_color,
-            font=font_small,
+    # Condition text below temperature
+    condition = weather.get("condition_text", "")
+    cond_bbox = draw.textbbox((0, 0), condition, font=font_small)
+    cond_h = cond_bbox[3] - cond_bbox[1]
+    heading_bbox = draw.textbbox((0, 0), temp_text, font=font_heading)
+    heading_h = heading_bbox[3] - heading_bbox[1]
+    draw.text((text_x, icon_y + heading_h + 4), condition, fill=GRAY_MID, font=font_small)
+
+    # High/Low and Rain line below the icon area
+    detail_y = icon_y + icon_size + 10
+    detail_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0   Rain: {rain}%"
+    draw.text((x, detail_y), detail_text, fill=FG, font=font_small)
+
+    detail_bbox = draw.textbbox((0, 0), detail_text, font=font_small)
+    detail_h = detail_bbox[3] - detail_bbox[1]
+    y = detail_y + detail_h + SECTION_GAP
+    return y
+
+
+def _draw_weather_icon(
+    draw: ImageDraw.ImageDraw,
+    code: int,
+    x: int,
+    y: int,
+    size: int,
+) -> None:
+    """Draw a weather icon using Pillow shapes based on WMO condition code."""
+    if code == 0:
+        # Clear: circle (sun)
+        margin = 4
+        draw.ellipse(
+            [x + margin, y + margin, x + size - margin, y + size - margin],
+            outline=FG,
+            width=2,
+        )
+        # Sun rays: short lines radiating from center
+        cx = x + size // 2
+        cy = y + size // 2
+        r_inner = size // 2 - margin
+        r_outer = size // 2 - 1
+        for angle_deg in range(0, 360, 45):
+            angle = math.radians(angle_deg)
+            x1 = cx + int(r_inner * math.cos(angle))
+            y1 = cy + int(r_inner * math.sin(angle))
+            x2 = cx + int(r_outer * math.cos(angle))
+            y2 = cy + int(r_outer * math.sin(angle))
+            draw.line([(x1, y1), (x2, y2)], fill=FG, width=1)
+
+    elif 1 <= code <= 3:
+        # Cloudy: cloud shape using overlapping ellipses
+        _draw_cloud(draw, x, y, size)
+
+    elif 45 <= code <= 48:
+        # Fog: horizontal parallel lines
+        line_y = y + 8
+        for i in range(4):
+            lx1 = x + 4
+            lx2 = x + size - 4
+            draw.line([(lx1, line_y), (lx2, line_y)], fill=FG, width=2)
+            line_y += 8
+
+    elif (51 <= code <= 67) or (80 <= code <= 82):
+        # Rain: cloud + vertical drop lines
+        _draw_cloud(draw, x, y - 4, size)
+        for dx in [10, 20, 30]:
+            rx = x + dx
+            ry_top = y + size - 12
+            ry_bot = y + size - 4
+            draw.line([(rx, ry_top), (rx, ry_bot)], fill=FG, width=2)
+
+    elif (71 <= code <= 77) or (85 <= code <= 86):
+        # Snow: cloud + dots
+        _draw_cloud(draw, x, y - 4, size)
+        for dx, dy in [(10, -8), (22, -4), (34, -8), (16, 0), (28, 0)]:
+            sx = x + dx
+            sy = y + size + dy - 8
+            draw.ellipse([sx - 2, sy - 2, sx + 2, sy + 2], fill=FG)
+
+    elif 95 <= code <= 99:
+        # Thunderstorm: cloud + zigzag bolt
+        _draw_cloud(draw, x, y - 4, size)
+        bolt_x = x + size // 2
+        bolt_y = y + size - 14
+        draw.line(
+            [(bolt_x, bolt_y), (bolt_x - 5, bolt_y + 6),
+             (bolt_x + 3, bolt_y + 6), (bolt_x - 2, bolt_y + 14)],
+            fill=FG,
+            width=2,
         )
 
-        zones.append(TouchZone(
-            x=bx,
-            y=y,
-            width=btn_width,
-            height=btn_height,
-            action="set_brightness",
-            params={"level": lvl},
-        ))
+    else:
+        # Unknown: question mark
+        draw.text((x + 8, y + 4), "?", fill=FG, font=font_heading)
 
-    y += btn_height + SECTION_GAP
-    return y, zones
+
+def _draw_cloud(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    size: int,
+) -> None:
+    """Draw a cloud shape using overlapping ellipses."""
+    # Base ellipse (wide, lower)
+    draw.ellipse(
+        [x + 2, y + size // 3, x + size - 2, y + size * 2 // 3 + 4],
+        outline=FG,
+        width=2,
+    )
+    # Top bump (smaller, higher)
+    draw.ellipse(
+        [x + size // 4, y + 4, x + size * 3 // 4, y + size // 2 + 2],
+        outline=FG,
+        width=2,
+    )
 
 
 def draw_vertical_divider(

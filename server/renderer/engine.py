@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from io import BytesIO
+from typing import Optional
 
 from PIL import Image, ImageDraw
 
@@ -11,7 +12,6 @@ from server.config import ScreenConfig
 from server.touchmap import TouchMap
 
 from .components import (
-    draw_brightness_bar,
     draw_departure_row,
     draw_footer,
     draw_header,
@@ -20,6 +20,7 @@ from .components import (
     draw_section_header,
     draw_tfl_row,
     draw_vertical_divider,
+    draw_weather,
 )
 from .theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
 
@@ -38,7 +39,7 @@ class RenderEngine:
         departures: list[dict],
         current_time: str,
         current_date: str,
-        brightness_level: int = 2,
+        weather: Optional[dict] = None,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -54,6 +55,9 @@ class RenderEngine:
             Formatted time string, e.g. "04:35".
         current_date:
             Formatted date string, e.g. "Sat 29 Mar".
+        weather:
+            Optional dict with keys: temperature, high, low, rain_chance,
+            condition_code, condition_text.
         """
         img = Image.new("L", (self.width, self.height), BG)
         draw = ImageDraw.Draw(img)
@@ -136,13 +140,10 @@ class RenderEngine:
                     touchmap.add(zone)
                 ry += SECTION_GAP // 2
 
-        # Brightness control at bottom of right panel
-        bright_y = max(ry + SECTION_GAP, self.height - 80)
-        bright_y, bright_zones = draw_brightness_bar(
-            draw, brightness_level, right_x, bright_y, right_width
-        )
-        for zone in bright_zones:
-            touchmap.add(zone)
+        # Weather at bottom of right panel
+        if weather is not None:
+            weather_y = max(ry + SECTION_GAP, self.height - 110)
+            draw_weather(draw, weather, right_x, weather_y, right_width)
 
         # ============================================================
         # Vertical divider

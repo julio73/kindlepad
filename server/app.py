@@ -54,6 +54,18 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         pass
     app.state.tfl_client = tfl_client
 
+    weather_client = None
+    try:
+        from server.integrations.weather_client import WeatherClient
+
+        weather_client = WeatherClient(
+            latitude=config.weather.latitude,
+            longitude=config.weather.longitude,
+        )
+    except (ImportError, Exception):
+        pass
+    app.state.weather_client = weather_client
+
     # Include routes
     app.include_router(router)
 

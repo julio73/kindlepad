@@ -48,11 +48,18 @@ class TflConfig(BaseModel):
     refresh_interval_seconds: int = 120
 
 
+class WeatherConfig(BaseModel):
+    latitude: float = 51.5074
+    longitude: float = -0.1278
+    location_name: str = "London"
+
+
 class AppConfig(BaseModel):
     server: ServerConfig = ServerConfig()
     screen: ScreenConfig = ScreenConfig()
     dirigera: DirigeraConfig = DirigeraConfig()
     tfl: TflConfig = TflConfig()
+    weather: WeatherConfig = WeatherConfig()
 
 
 def load_config(path: str) -> AppConfig:

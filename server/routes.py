@@ -93,7 +93,23 @@ async def get_screen(request: Request) -> Response:
             if d.type == "light"
         ]
 
-    brightness_level = getattr(request.app.state, "brightness_level", 2)
+    # Fetch weather data
+    weather: dict | None = None
+    weather_client = getattr(request.app.state, "weather_client", None)
+    if weather_client is not None:
+        try:
+            wd = weather_client.get_weather()
+            if wd is not None:
+                weather = {
+                    "temperature": wd.temperature,
+                    "high": wd.high,
+                    "low": wd.low,
+                    "rain_chance": wd.rain_chance,
+                    "condition_code": wd.condition_code,
+                    "condition_text": wd.condition_text,
+                }
+        except Exception:
+            weather = None
 
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
@@ -101,7 +117,7 @@ async def get_screen(request: Request) -> Response:
         departures=departures,
         current_time=now,
         current_date=current_date,
-        brightness_level=brightness_level,
+        weather=weather,
     )
 
     # Store latest touchmap for touch resolution
