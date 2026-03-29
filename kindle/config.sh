@@ -3,11 +3,11 @@
 # Edit these values for your setup
 
 # Server connection
-SERVER_URL="https://kindlepad.yourdomain.com"
+SERVER_URL="http://YOUR_SERVER_IP:8070"
 TOKEN="your-secret-token"
 
 # Display settings
-REFRESH_INTERVAL=30        # seconds between screen refreshes
+REFRESH_INTERVAL=120       # seconds between screen refreshes
 FULL_REFRESH_EVERY=10      # full e-ink refresh every N cycles (clears ghosting)
 
 # Touch input device (PW3 typically uses event1)

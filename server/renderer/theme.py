@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from typing import Union
 
+from pathlib import Path
+
 from PIL import ImageFont
+
+# --- Font directory (bundled fonts for portability) ---
+_FONT_DIR = str(Path(__file__).resolve().parent.parent.parent / "fonts")
 
 # --- Grayscale palette ---
 BG = 255        # white
@@ -53,7 +58,7 @@ def _load_default(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFon
 def _load_display_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
     """Load DIN Condensed Bold for display numerals, falling back to system fonts."""
     return (
-        _try_load(["/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf"], size)
+        _try_load([f"{_FONT_DIR}/DIN Condensed Bold.ttf", "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf"], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_default(size)
     )
@@ -62,7 +67,7 @@ def _load_display_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.Ima
 def _load_heading_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
     """Load DIN Alternate Bold for section headers."""
     return (
-        _try_load(["/System/Library/Fonts/Supplemental/DIN Alternate Bold.ttf"], size)
+        _try_load([f"{_FONT_DIR}/DIN Alternate Bold.ttf", "/System/Library/Fonts/Supplemental/DIN Alternate Bold.ttf"], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_display_font(size)
     )
@@ -71,7 +76,7 @@ def _load_heading_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.Ima
 def _load_body_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
     """Load Avenir Next for body text."""
     return (
-        _try_load(["/System/Library/Fonts/Supplemental/Avenir Next.ttc"], size)
+        _try_load([f"{_FONT_DIR}/Avenir Next.ttc", "/System/Library/Fonts/Avenir Next.ttc"], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_display_font(size)
     )

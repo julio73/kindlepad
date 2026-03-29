@@ -191,8 +191,8 @@ main() {
             display_image "$SCREEN_FILE" "$refresh_mode"
 
             # Wait for touch or timeout
-            touch_coords="$(read_touch)"
-            if [ $? -eq 0 ] && [ -n "$touch_coords" ]; then
+            touch_coords=""
+            if touch_coords="$(read_touch)" && [ -n "$touch_coords" ]; then
                 # Parse "x y" from read_touch output
                 touch_x="$(echo "$touch_coords" | cut -d' ' -f1)"
                 touch_y="$(echo "$touch_coords" | cut -d' ' -f2)"
