@@ -14,10 +14,10 @@ GRAY_MID = 140
 GRAY_DARK = 80
 
 # --- Font sizes ---
-HEADING = 42
-BODY = 32
-SMALL = 24
-LABEL = 28
+HEADING = 30
+BODY = 22
+SMALL = 17
+LABEL = 20
 
 # --- Font loading ---
 # Pillow 11+ supports ImageFont.load_default(size=N).
@@ -55,6 +55,6 @@ font_small = _load_font(SMALL)
 font_label = _load_font(LABEL)
 
 # --- Spacing ---
-PADDING = 40
-SECTION_GAP = 30
-ROW_HEIGHT = 70
+PADDING = 28
+SECTION_GAP = 20
+ROW_HEIGHT = 50

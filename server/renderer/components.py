@@ -18,8 +18,8 @@ from .theme import (
     font_small,
 )
 
-# Screen width constant for layout calculations.
-SCREEN_WIDTH = 1072
+# Screen width will be set by the engine before rendering.
+SCREEN_WIDTH = 758
 
 
 def draw_header(draw: ImageDraw.ImageDraw, title: str, time_str: str, y: int) -> int:
@@ -86,8 +86,8 @@ def draw_light_toggle(
     y: int,
 ) -> tuple[int, list[TouchZone]]:
     """Draw a light toggle with ON/OFF buttons side by side."""
-    BUTTON_WIDTH = 480
-    BUTTON_HEIGHT = 120
+    BUTTON_WIDTH = 330
+    BUTTON_HEIGHT = 90
     GAP = 12
 
     # Device name
