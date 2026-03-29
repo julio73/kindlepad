@@ -70,6 +70,45 @@ send_touch() {
     fi
 }
 
+# --- Brightness auto-management ---
+
+NIGHT_START=19  # 7pm
+NIGHT_END=7     # 7am
+NIGHT_BRIGHTNESS=512  # low brightness for night touch
+BACKLIGHT_TIMEOUT=30  # seconds before auto-dim
+BACKLIGHT_OFF_TIME=0  # timestamp when backlight should turn off
+
+is_nighttime() {
+    _hour="$(date +%H)"
+    # Remove leading zero for comparison
+    _hour="${_hour#0}"
+    [ "$_hour" -ge "$NIGHT_START" ] || [ "$_hour" -lt "$NIGHT_END" ]
+}
+
+set_backlight() {
+    echo "$1" > /sys/class/backlight/max77696-bl/brightness 2>/dev/null
+}
+
+handle_auto_brightness() {
+    # Called on each touch. At night: turn on briefly. During day: stay off.
+    if is_nighttime; then
+        set_backlight "$NIGHT_BRIGHTNESS"
+        BACKLIGHT_OFF_TIME=$(($(date +%s) + BACKLIGHT_TIMEOUT))
+        log "INFO" "Night touch: backlight on for ${BACKLIGHT_TIMEOUT}s"
+    fi
+}
+
+check_backlight_timeout() {
+    # Turn off backlight if timeout has elapsed
+    if [ "$BACKLIGHT_OFF_TIME" -gt 0 ]; then
+        _now="$(date +%s)"
+        if [ "$_now" -ge "$BACKLIGHT_OFF_TIME" ]; then
+            set_backlight 0
+            BACKLIGHT_OFF_TIME=0
+        fi
+    fi
+}
+
 # --- Touch reading ---
 
 read_touch() {
@@ -125,6 +164,7 @@ main() {
 
     # Clear screen and do ONE full refresh at startup
     $FBINK -c 2>>"$LOG_FILE"
+    set_backlight 0  # start with backlight off
     if fetch_screen; then
         display_full "$SCREEN_FILE"
         log "INFO" "Startup: full refresh done"
@@ -145,6 +185,7 @@ main() {
             touch_y="$(echo "$touch_coords" | cut -d' ' -f2)"
 
             log "INFO" "Touch: x=${touch_x}, y=${touch_y}"
+            handle_auto_brightness
             send_touch "$touch_x" "$touch_y"
 
             if fetch_screen; then
@@ -172,6 +213,9 @@ main() {
                 log "ERROR" "Cycle ${cycle}: fetch failed"
             fi
         fi
+
+        # Auto-dim backlight after timeout
+        check_backlight_timeout
     done
 }
 
