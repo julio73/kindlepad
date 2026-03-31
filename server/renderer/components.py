@@ -298,7 +298,7 @@ def draw_light_button(
         y=y,
         width=width,
         height=btn_height,
-        action="toggle_light",
+        action="light_off" if is_on else "light_on",
         params={"device_id": device_id},
     )
 

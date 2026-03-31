@@ -27,10 +27,12 @@ import json
 
 # evdev constants
 EV_SYN = 0x00
+EV_KEY = 0x01
 EV_ABS = 0x03
 SYN_REPORT = 0x00
 ABS_MT_POSITION_X = 0x35
 ABS_MT_POSITION_Y = 0x36
+KEY_POWER = 0x74
 
 # 32-bit ARM input_event: uint32 sec, uint32 usec, uint16 type, uint16 code, int32 value
 EVENT_FORMAT = "IIHHi"
@@ -40,6 +42,7 @@ EVENT_SIZE = struct.calcsize(EVENT_FORMAT)  # 16 bytes
 def parse_args(argv):
     """Parse command-line arguments. Accepts positional or --flag style."""
     device = os.environ.get("TOUCH_DEVICE", "/dev/input/event1")
+    power_device = None
     timeout = 30
 
     positional = []
@@ -52,6 +55,10 @@ def parse_args(argv):
             except ValueError:
                 print("Error: --timeout requires an integer", file=sys.stderr)
                 sys.exit(2)
+            i += 2
+            continue
+        elif arg == "--power-device" and i + 1 < len(argv):
+            power_device = argv[i + 1]
             i += 2
             continue
         elif arg.startswith("--"):
@@ -70,78 +77,90 @@ def parse_args(argv):
         except ValueError:
             pass
 
-    return device, timeout
+    return device, power_device, timeout
 
 
-def read_touch(device_path, timeout):
+def read_touch(device_path, power_path, timeout):
     """
-    Read from the evdev device until a complete touch event is received
-    or the timeout expires.
+    Read from touch and (optionally) power button devices until a touch
+    event or power button press is received, or the timeout expires.
 
-    Returns (x, y) tuple on success, None on timeout.
+    Returns ("touch", x, y) for touch, ("power",) for power press,
+    or None on timeout.
     """
+    fds = []
     try:
-        fd = os.open(device_path, os.O_RDONLY | os.O_NONBLOCK)
+        touch_fd = os.open(device_path, os.O_RDONLY | os.O_NONBLOCK)
+        fds.append(touch_fd)
     except OSError as e:
         print("Error opening %s: %s" % (device_path, e), file=sys.stderr)
         sys.exit(2)
 
+    power_fd = None
+    if power_path:
+        try:
+            power_fd = os.open(power_path, os.O_RDONLY | os.O_NONBLOCK)
+            fds.append(power_fd)
+        except OSError:
+            # Power device unavailable — continue without it
+            pass
+
     try:
         x = None
         y = None
-        buf = b""
+        bufs = {fd: b"" for fd in fds}
 
         while True:
-            # Wait for data or timeout
-            readable, _, _ = select.select([fd], [], [], float(timeout))
+            readable, _, _ = select.select(fds, [], [], float(timeout))
 
             if not readable:
-                # Timeout
                 return None
 
-            # Read available data
-            try:
-                chunk = os.read(fd, EVENT_SIZE * 64)
-            except OSError:
-                # Device temporarily unavailable, retry
-                continue
-
-            if not chunk:
-                continue
-
-            buf += chunk
-
-            # Process all complete events in the buffer
-            while len(buf) >= EVENT_SIZE:
-                raw = buf[:EVENT_SIZE]
-                buf = buf[EVENT_SIZE:]
-
+            for fd in readable:
                 try:
-                    _sec, _usec, ev_type, ev_code, ev_value = struct.unpack(
-                        EVENT_FORMAT, raw
-                    )
-                except struct.error:
-                    # Malformed data — skip this chunk
+                    chunk = os.read(fd, EVENT_SIZE * 64)
+                except OSError:
                     continue
 
-                if ev_type == EV_ABS:
-                    if ev_code == ABS_MT_POSITION_X:
-                        x = ev_value
-                    elif ev_code == ABS_MT_POSITION_Y:
-                        y = ev_value
-                elif ev_type == EV_SYN and ev_code == SYN_REPORT:
-                    # End of event packet — if we have both coordinates, we're done
-                    if x is not None and y is not None:
-                        return (x, y)
+                if not chunk:
+                    continue
+
+                bufs[fd] += chunk
+
+                while len(bufs[fd]) >= EVENT_SIZE:
+                    raw = bufs[fd][:EVENT_SIZE]
+                    bufs[fd] = bufs[fd][EVENT_SIZE:]
+
+                    try:
+                        _sec, _usec, ev_type, ev_code, ev_value = struct.unpack(
+                            EVENT_FORMAT, raw
+                        )
+                    except struct.error:
+                        continue
+
+                    if fd == touch_fd:
+                        if ev_type == EV_ABS:
+                            if ev_code == ABS_MT_POSITION_X:
+                                x = ev_value
+                            elif ev_code == ABS_MT_POSITION_Y:
+                                y = ev_value
+                        elif ev_type == EV_SYN and ev_code == SYN_REPORT:
+                            if x is not None and y is not None:
+                                return ("touch", x, y)
+                    elif fd == power_fd:
+                        # KEY_POWER with value=1 is key-down
+                        if ev_type == EV_KEY and ev_code == KEY_POWER and ev_value == 1:
+                            return ("power",)
     finally:
-        os.close(fd)
+        for fd in fds:
+            os.close(fd)
 
 
 def main():
-    device, timeout = parse_args(sys.argv[1:])
+    device, power_device, timeout = parse_args(sys.argv[1:])
 
     try:
-        result = read_touch(device, timeout)
+        result = read_touch(device, power_device, timeout)
     except KeyboardInterrupt:
         sys.exit(1)
 
@@ -149,9 +168,11 @@ def main():
         # Timeout
         sys.exit(1)
 
-    x, y = result
-    # Output compact JSON to stdout
-    sys.stdout.write(json.dumps({"x": x, "y": y}) + "\n")
+    if result[0] == "power":
+        sys.stdout.write(json.dumps({"button": "power"}) + "\n")
+    else:
+        _, x, y = result
+        sys.stdout.write(json.dumps({"x": x, "y": y}) + "\n")
     sys.stdout.flush()
     sys.exit(0)
 

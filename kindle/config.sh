@@ -10,8 +10,9 @@ TOKEN="your-secret-token"
 REFRESH_INTERVAL=120       # seconds between screen refreshes
 FULL_REFRESH_EVERY=10      # full e-ink refresh every N cycles (clears ghosting)
 
-# Touch input device (PW3 typically uses event1)
+# Input devices (PW3: touch=event1, power button=event0)
 TOUCH_DEVICE="/dev/input/event1"
+POWER_DEVICE="/dev/input/event0"
 
 # Paths
 KINDLEPAD_DIR="/mnt/us/kindlepad"

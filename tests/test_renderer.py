@@ -89,12 +89,19 @@ class TestRenderTouchZones:
             current_date="Sat 29 Mar",
         )
 
-        light_zones = [z for z in touchmap.zones if z.action == "toggle_light"]
+        light_zones = [z for z in touchmap.zones if z.action in ("light_on", "light_off")]
         assert len(light_zones) == len(MOCK_LIGHTS)
 
         zone_ids = {z.params.get("device_id") for z in light_zones}
         expected_ids = {light["id"] for light in MOCK_LIGHTS}
         assert zone_ids == expected_ids
+
+        # Lights that are ON should have light_off action, and vice versa
+        for zone in light_zones:
+            did = zone.params["device_id"]
+            light = next(l for l in MOCK_LIGHTS if l["id"] == did)
+            expected_action = "light_off" if light["is_on"] else "light_on"
+            assert zone.action == expected_action
 
 
 class TestRenderWithDepartures:
