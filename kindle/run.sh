@@ -118,11 +118,20 @@ check_backlight_timeout() {
 # --- Touch reading ---
 
 read_touch() {
-    # Returns "x y" on stdout if touch detected, returns 1 on timeout.
+    # Returns "x y" for touch, "power" for button press, returns 1 on timeout.
     if [ -x "$SCRIPT_DIR/touch_reader.py" ] && command -v python >/dev/null 2>&1; then
-        _result="$(python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" --timeout "$REFRESH_INTERVAL" 2>>"$LOG_FILE")"
+        _power_flag=""
+        if [ -n "$POWER_DEVICE" ]; then
+            _power_flag="--power-device $POWER_DEVICE"
+        fi
+        _result="$(python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" $_power_flag --timeout "$REFRESH_INTERVAL" 2>>"$LOG_FILE")"
         _rc=$?
         if [ $_rc -eq 0 ] && [ -n "$_result" ]; then
+            # Check for power button press
+            if echo "$_result" | grep -q '"button"'; then
+                echo "power"
+                return 0
+            fi
             _x="$(echo "$_result" | sed 's/.*"x" *: *\([0-9]*\).*/\1/')"
             _y="$(echo "$_result" | sed 's/.*"y" *: *\([0-9]*\).*/\1/')"
             if [ -n "$_x" ] && [ -n "$_y" ]; then
@@ -140,10 +149,14 @@ read_touch() {
 }
 
 drain_stale_touches() {
-    # Drain ALL queued touch events so we don't replay stale taps.
+    # Drain ALL queued touch/button events so we don't replay stale inputs.
     # Each invocation of touch_reader.py reads one event; loop until timeout.
     if [ -x "$SCRIPT_DIR/touch_reader.py" ] && command -v python >/dev/null 2>&1; then
-        while python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" --timeout 1 >/dev/null 2>&1; do
+        _power_flag=""
+        if [ -n "$POWER_DEVICE" ]; then
+            _power_flag="--power-device $POWER_DEVICE"
+        fi
+        while python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" $_power_flag --timeout 1 >/dev/null 2>&1; do
             : # keep draining
         done
     fi
@@ -208,9 +221,19 @@ main() {
     while true; do
         cycle=$((cycle + 1))
 
-        # Wait for touch or timeout
+        # Wait for touch, power button, or timeout
         touch_coords=""
         if touch_coords="$(read_touch)" && [ -n "$touch_coords" ]; then
+
+            # Power button → toggle sleep
+            if [ "$touch_coords" = "power" ]; then
+                log "INFO" "Power button pressed"
+                drain_stale_touches
+                enter_sleep_mode
+                cycle=0
+                continue
+            fi
+
             # Touch detected — send to server, fetch updated screen
             touch_x="$(echo "$touch_coords" | cut -d' ' -f1)"
             touch_y="$(echo "$touch_coords" | cut -d' ' -f2)"
