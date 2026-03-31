@@ -147,7 +147,10 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
 
     # Dispatch actions
     refresh = False
-    if zone.action in ("light_on", "light_off") and dirigera_client is not None:
+    if zone.action == "screen_off":
+        return {"action": "screen_off", "refresh": False}
+
+    elif zone.action in ("light_on", "light_off") and dirigera_client is not None:
         target_state = zone.action == "light_on"
         device_id = zone.params.get("device_id", "")
         try:
@@ -156,7 +159,7 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         except Exception:
             pass
 
-    if zone.action == "toggle_light" and dirigera_client is not None:
+    elif zone.action == "toggle_light" and dirigera_client is not None:
         device_id = zone.params.get("device_id", "")
         try:
             dirigera_client.toggle(device_id)
@@ -164,10 +167,9 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         except Exception:
             pass
 
-    if zone.action == "set_brightness":
+    elif zone.action == "set_brightness":
         level = zone.params.get("level", 2)
         request.app.state.brightness_level = level
-        # Map level to actual brightness value for the Kindle
         brightness_map = {0: 0, 1: 512, 2: 1024, 3: 2048}
         refresh = True
         return {

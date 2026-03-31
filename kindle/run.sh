@@ -61,11 +61,15 @@ fetch_screen() {
 }
 
 send_touch() {
+    LAST_TOUCH_ACTION=""
     _response="$(wget -q -O - \
         --post-data="{\"x\":$1,\"y\":$2}" \
         --header="Content-Type: application/json" \
         --header="Authorization: Bearer ${TOKEN}" \
         "${SERVER_URL}/touch" 2>>"$LOG_FILE")"
+
+    # Extract action from response
+    LAST_TOUCH_ACTION="$(echo "$_response" | sed -n 's/.*"action" *: *"\([^"]*\)".*/\1/p')"
 
     # Check if response contains brightness setting
     _brightness="$(echo "$_response" | sed -n 's/.*"brightness" *: *\([0-9]*\).*/\1/p')"
@@ -136,9 +140,34 @@ read_touch() {
 }
 
 drain_stale_touches() {
-    # Drain any queued touch events for 1 second so we don't replay stale taps
+    # Drain ALL queued touch events so we don't replay stale taps.
+    # Each invocation of touch_reader.py reads one event; loop until timeout.
     if [ -x "$SCRIPT_DIR/touch_reader.py" ] && command -v python >/dev/null 2>&1; then
-        python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" --timeout 1 >/dev/null 2>&1
+        while python "$SCRIPT_DIR/touch_reader.py" "$TOUCH_DEVICE" --timeout 1 >/dev/null 2>&1; do
+            : # keep draining
+        done
+    fi
+}
+
+# --- Sleep mode ---
+
+enter_sleep_mode() {
+    log "INFO" "Entering sleep mode"
+    set_backlight 0
+    BACKLIGHT_OFF_TIME=0
+    $FBINK -c 2>>"$LOG_FILE"  # clear screen to white
+    # Wait for any touch to wake — loops on timeout until a tap arrives
+    while true; do
+        if read_touch >/dev/null 2>&1; then
+            log "INFO" "Waking from sleep"
+            drain_stale_touches
+            break
+        fi
+    done
+    # Wake: fetch fresh screen with full refresh
+    handle_auto_brightness
+    if fetch_screen; then
+        display_full "$SCREEN_FILE"
     fi
 }
 
@@ -189,6 +218,13 @@ main() {
             log "INFO" "Touch: x=${touch_x}, y=${touch_y}"
             handle_auto_brightness
             send_touch "$touch_x" "$touch_y"
+
+            if [ "$LAST_TOUCH_ACTION" = "screen_off" ]; then
+                drain_stale_touches
+                enter_sleep_mode
+                cycle=0
+                continue
+            fi
 
             if fetch_screen; then
                 # Check if this cycle needs a full refresh for ghosting

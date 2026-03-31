@@ -16,13 +16,14 @@ from .components import (
     draw_footer,
     draw_header,
     draw_light_group,
+    draw_power_button,
     draw_room_header,
     draw_section_header,
     draw_tfl_row,
     draw_vertical_divider,
     draw_weather,
 )
-from .theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
+from .theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP, font_display
 
 
 class RenderEngine:
@@ -72,6 +73,12 @@ class RenderEngine:
             draw, "KindlePad", current_time, current_date, self.width, y
         )
         header_bottom = y
+
+        # Power/sleep button in header area, right of title
+        title_bbox = draw.textbbox((0, 0), "KINDLEPAD", font=font_display)
+        title_w = title_bbox[2] - title_bbox[0]
+        power_zone = draw_power_button(draw, PADDING + title_w + 16, PADDING + 10)
+        touchmap.add(power_zone)
 
         # --- Panel geometry ---
         left_x = PADDING

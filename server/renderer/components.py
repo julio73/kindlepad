@@ -225,6 +225,35 @@ def draw_room_header(
     return y
 
 
+def draw_power_button(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+) -> TouchZone:
+    """Draw a small power icon (arc with gap + vertical line).
+
+    Returns a TouchZone for the sleep action.
+    """
+    r = 9
+    cx = x + r
+    cy = y + r
+
+    # Circle arc with gap at top
+    draw.arc([cx - r, cy - r, cx + r, cy + r], start=40, end=320, fill=GRAY_MID, width=2)
+    # Vertical line through the gap
+    draw.line([(cx, cy - r), (cx, cy - 3)], fill=GRAY_MID, width=2)
+
+    # Generous touch zone for finger taps
+    pad = 12
+    return TouchZone(
+        x=x - pad,
+        y=y - pad,
+        width=r * 2 + pad * 2,
+        height=r * 2 + pad * 2,
+        action="screen_off",
+    )
+
+
 def draw_light_button(
     draw: ImageDraw.ImageDraw,
     name: str,
