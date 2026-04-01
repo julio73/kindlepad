@@ -29,6 +29,9 @@ async def get_screen(request: Request) -> Response:
     now = datetime.now().strftime("%H:%M")
     battery = request.query_params.get("battery", None)
     battery_pct = int(battery) if battery and battery.isdigit() else None
+    if battery_pct is not None:
+        battery_pct = min(battery_pct, 100)
+    is_charging = request.query_params.get("charging", "0") == "1"
     current_date = datetime.now().strftime("%a %d %b")
 
     # Build a mapping of device id -> room from config
@@ -123,6 +126,7 @@ async def get_screen(request: Request) -> Response:
         current_date=current_date,
         weather=weather,
         battery_pct=battery_pct,
+        is_charging=is_charging,
         station_name=station_name,
     )
 

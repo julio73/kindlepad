@@ -50,14 +50,26 @@ display_partial() {
 # --- Network ---
 
 get_battery() {
-    cat /sys/devices/system/wario_battery/wario_battery0/battery_capacity 2>/dev/null | tr -d '%'
+    _cap="$(cat /sys/devices/system/wario_battery/wario_battery0/battery_capacity 2>/dev/null | tr -d '%')"
+    # Clamp to 100
+    if [ -n "$_cap" ] && [ "$_cap" -gt 100 ]; then
+        _cap=100
+    fi
+    echo "$_cap"
+}
+
+is_charging() {
+    _chg="$(cat /sys/devices/system/wario_charger/wario_charger0/charging 2>/dev/null)"
+    [ "$_chg" = "1" ]
 }
 
 fetch_screen() {
     _batt="$(get_battery)"
+    _charging=0
+    if is_charging; then _charging=1; fi
     wget -q -O "$SCREEN_FILE" \
         --header="Authorization: Bearer ${TOKEN}" \
-        "${SERVER_URL}/screen?battery=${_batt:-0}" 2>>"$LOG_FILE"
+        "${SERVER_URL}/screen?battery=${_batt:-0}&charging=${_charging}" 2>>"$LOG_FILE"
 }
 
 send_touch() {
@@ -205,14 +217,14 @@ enter_sleep_mode() {
 
     # Wake: show loading state, reconnect, fetch
     handle_auto_brightness
-    $FBINK -m "Loading..." -f 2>>"$LOG_FILE"
+    $FBINK -pmM "Loading..." -f 2>>"$LOG_FILE"
     wifi_on
     if wait_for_wifi; then
         if fetch_screen; then
             display_full "$SCREEN_FILE"
         fi
     else
-        $FBINK -m "No connection — retrying..." -f 2>>"$LOG_FILE"
+        $FBINK -pmM "No connection — retrying..." -f 2>>"$LOG_FILE"
         log "WARN" "WiFi reconnect timed out"
     fi
 }

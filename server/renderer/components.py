@@ -561,15 +561,39 @@ def draw_footer(
     y: int,
     width: int,
     battery_pct: int | None = None,
+    is_charging: bool = False,
 ) -> int:
-    """Draw timestamp left-aligned, battery right-aligned."""
+    """Draw timestamp left-aligned, battery right-aligned.
+
+    When charging, a small lightning bolt is drawn to the left of the
+    battery percentage.
+    """
     draw.text((x, y), timestamp, fill=GRAY_MID, font=font_small)
 
     if battery_pct is not None:
         batt_text = f"{battery_pct}%"
         batt_bbox = draw.textbbox((0, 0), batt_text, font=font_small)
         batt_w = batt_bbox[2] - batt_bbox[0]
-        draw.text((x + width - batt_w, y), batt_text, fill=GRAY_MID, font=font_small)
+        batt_h = batt_bbox[3] - batt_bbox[1]
+        batt_x = x + width - batt_w
+
+        if is_charging:
+            # Small lightning bolt to the left of the percentage
+            bolt_w = 10
+            bx = batt_x - bolt_w - 4
+            by = y + 1
+            h = batt_h
+            bolt = [
+                (bx + 5, by),
+                (bx + 1, by + h // 2 + 1),
+                (bx + 5, by + h // 2 - 1),
+                (bx + 3, by + h),
+                (bx + 9, by + h // 2 - 1),
+                (bx + 5, by + h // 2 + 1),
+            ]
+            draw.polygon(bolt, fill=GRAY_MID)
+
+        draw.text((batt_x, y), batt_text, fill=GRAY_MID, font=font_small)
 
     bbox = draw.textbbox((0, 0), timestamp, font=font_small)
     text_h = bbox[3] - bbox[1]
