@@ -79,6 +79,29 @@ send_touch() {
     fi
 }
 
+# --- WiFi management ---
+
+wifi_off() {
+    lipc-set-prop com.lab126.wifid enable 0 >/dev/null 2>&1
+    log "INFO" "WiFi disabled"
+}
+
+wifi_on() {
+    lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1
+    log "INFO" "WiFi enabled"
+}
+
+wait_for_wifi() {
+    # Poll until we can reach the server (or timeout after 15s)
+    _attempts=0
+    while [ "$_attempts" -lt 15 ]; do
+        wget -q --spider --timeout=2 "${SERVER_URL}/health" 2>/dev/null && return 0
+        _attempts=$((_attempts + 1))
+        sleep 1
+    done
+    return 1
+}
+
 # --- Brightness auto-management ---
 
 NIGHT_START=19  # 7pm
@@ -168,7 +191,9 @@ enter_sleep_mode() {
     log "INFO" "Entering sleep mode"
     set_backlight 0
     BACKLIGHT_OFF_TIME=0
+    wifi_off
     $FBINK -c 2>>"$LOG_FILE"  # clear screen to white
+
     # Wait for any touch to wake — loops on timeout until a tap arrives
     while true; do
         if read_touch >/dev/null 2>&1; then
@@ -177,10 +202,18 @@ enter_sleep_mode() {
             break
         fi
     done
-    # Wake: fetch fresh screen with full refresh
+
+    # Wake: show loading state, reconnect, fetch
     handle_auto_brightness
-    if fetch_screen; then
-        display_full "$SCREEN_FILE"
+    $FBINK -m "Loading..." -f 2>>"$LOG_FILE"
+    wifi_on
+    if wait_for_wifi; then
+        if fetch_screen; then
+            display_full "$SCREEN_FILE"
+        fi
+    else
+        $FBINK -m "No connection — retrying..." -f 2>>"$LOG_FILE"
+        log "WARN" "WiFi reconnect timed out"
     fi
 }
 
