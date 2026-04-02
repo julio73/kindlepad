@@ -67,9 +67,13 @@ fetch_screen() {
     _batt="$(get_battery)"
     _charging=0
     if is_charging; then _charging=1; fi
+    _url="${SERVER_URL}/screen?battery=${_batt:-0}&charging=${_charging}"
+    if [ "$1" = "wake" ]; then
+        _url="${_url}&wake=1"
+    fi
     wget -q -O "$SCREEN_FILE" \
         --header="Authorization: Bearer ${TOKEN}" \
-        "${SERVER_URL}/screen?battery=${_batt:-0}&charging=${_charging}" 2>>"$LOG_FILE"
+        "$_url" 2>>"$LOG_FILE"
 }
 
 send_touch() {
@@ -204,7 +208,12 @@ enter_sleep_mode() {
     set_backlight 0
     BACKLIGHT_OFF_TIME=0
     wifi_off
-    $FBINK -c 2>>"$LOG_FILE"  # clear screen to white
+    # Show sleep screen (or clear if PNG missing)
+    if [ -f "$SCRIPT_DIR/sleep.png" ]; then
+        display_full "$SCRIPT_DIR/sleep.png"
+    else
+        $FBINK -c 2>>"$LOG_FILE"
+    fi
 
     # Wait for any touch to wake — loops on timeout until a tap arrives
     while true; do
@@ -215,16 +224,17 @@ enter_sleep_mode() {
         fi
     done
 
-    # Wake: show loading state, reconnect, fetch
+    # Wake: show loading screen, reconnect, fetch
     handle_auto_brightness
-    $FBINK -pmM "Loading..." -f 2>>"$LOG_FILE"
+    if [ -f "$SCRIPT_DIR/loading.png" ]; then
+        display_full "$SCRIPT_DIR/loading.png"
+    fi
     wifi_on
     if wait_for_wifi; then
-        if fetch_screen; then
+        if fetch_screen "wake"; then
             display_full "$SCREEN_FILE"
         fi
     else
-        $FBINK -pmM "No connection — retrying..." -f 2>>"$LOG_FILE"
         log "WARN" "WiFi reconnect timed out"
     fi
 }

@@ -32,7 +32,13 @@ async def get_screen(request: Request) -> Response:
     if battery_pct is not None:
         battery_pct = min(battery_pct, 100)
     is_charging = request.query_params.get("charging", "0") == "1"
+    is_wake = request.query_params.get("wake", "0") == "1"
     current_date = datetime.now().strftime("%a %d %b")
+
+    # Force-refresh light states on wake so we pick up changes made
+    # via the IKEA app while the Kindle was asleep.
+    if is_wake and dirigera_client is not None:
+        dirigera_client._invalidate_cache()
 
     # Build a mapping of device id -> room from config
     device_room_map: dict[str, str] = {
