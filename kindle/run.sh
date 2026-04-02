@@ -94,12 +94,12 @@ send_touch() {
 # --- WiFi management ---
 
 wifi_off() {
-    lipc-set-prop com.lab126.wifid enable 0 >/dev/null 2>&1
+    lipc-set-prop com.lab126.cmd wirelessEnable 0 >/dev/null 2>&1
     log "INFO" "WiFi disabled"
 }
 
 wifi_on() {
-    lipc-set-prop com.lab126.wifid enable 1 >/dev/null 2>&1
+    lipc-set-prop com.lab126.cmd wirelessEnable 1 >/dev/null 2>&1
     log "INFO" "WiFi enabled"
 }
 
