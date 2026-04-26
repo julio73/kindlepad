@@ -15,10 +15,20 @@ fi
 
 FBINK="/mnt/us/bin/fbink"
 LOG_FILE="${KINDLEPAD_DIR}/run.log"
+PIDFILE="/var/run/kindlepad.pid"
+MAX_LOG_SIZE=524288  # 512 KB — rotate when exceeded
 
 log() {
     _ts="$(date '+%Y-%m-%d %H:%M:%S')"
     echo "${_ts} [$1] $2" >> "$LOG_FILE"
+}
+
+rotate_log() {
+    _size="$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)"
+    if [ "$_size" -gt "$MAX_LOG_SIZE" ]; then
+        mv "$LOG_FILE" "${LOG_FILE}.old"
+        log "INFO" "Log rotated"
+    fi
 }
 
 # --- Framework control ---
@@ -50,14 +60,26 @@ display_partial() {
 # --- Network ---
 
 get_battery() {
-    cat /sys/devices/system/wario_battery/wario_battery0/battery_capacity 2>/dev/null | tr -d '%'
+    _cap="$(cat /sys/devices/system/wario_battery/wario_battery0/battery_capacity 2>/dev/null | tr -d '%')"
+    # Clamp to 100
+    if [ -n "$_cap" ] && [ "$_cap" -gt 100 ]; then
+        _cap=100
+    fi
+    echo "$_cap"
+}
+
+is_charging() {
+    _chg="$(cat /sys/devices/system/wario_charger/wario_charger0/charging 2>/dev/null)"
+    [ "$_chg" = "1" ]
 }
 
 fetch_screen() {
     _batt="$(get_battery)"
+    _charging=0
+    if is_charging; then _charging=1; fi
     wget -q -O "$SCREEN_FILE" \
         --header="Authorization: Bearer ${TOKEN}" \
-        "${SERVER_URL}/screen?battery=${_batt:-0}" 2>>"$LOG_FILE"
+        "${SERVER_URL}/screen?battery=${_batt:-0}&charging=${_charging}" 2>>"$LOG_FILE"
 }
 
 send_touch() {
@@ -205,14 +227,14 @@ enter_sleep_mode() {
 
     # Wake: show loading state, reconnect, fetch
     handle_auto_brightness
-    $FBINK -m "Loading..." -f 2>>"$LOG_FILE"
+    $FBINK -pmM "Loading..." -f 2>>"$LOG_FILE"
     wifi_on
     if wait_for_wifi; then
         if fetch_screen; then
             display_full "$SCREEN_FILE"
         fi
     else
-        $FBINK -m "No connection — retrying..." -f 2>>"$LOG_FILE"
+        $FBINK -pmM "No connection — retrying..." -f 2>>"$LOG_FILE"
         log "WARN" "WiFi reconnect timed out"
     fi
 }
@@ -222,6 +244,7 @@ enter_sleep_mode() {
 cleanup() {
     log "INFO" "KindlePad shutting down"
     rm -f "$SCREEN_FILE"
+    rm -f "$PIDFILE"
     exit 0
 }
 
@@ -229,11 +252,23 @@ cleanup() {
 
 main() {
     mkdir -p "$KINDLEPAD_DIR"
-    log "INFO" "KindlePad run.sh starting"
+
+    if [ -f "$PIDFILE" ]; then
+        _existing="$(cat "$PIDFILE" 2>/dev/null)"
+        if [ -n "$_existing" ] && kill -0 "$_existing" 2>/dev/null; then
+            log "WARN" "Refusing to start; PID $_existing already running"
+            echo "KindlePad already running (PID $_existing)" >&2
+            exit 1
+        fi
+        rm -f "$PIDFILE"
+    fi
+    echo $$ > "$PIDFILE"
+    trap cleanup TERM INT
+
+    rotate_log
+    log "INFO" "KindlePad run.sh starting (PID $$)"
     log "INFO" "Server: ${SERVER_URL}"
     log "INFO" "Refresh: ${REFRESH_INTERVAL}s, full refresh every ${FULL_REFRESH_EVERY} cycles"
-
-    trap cleanup TERM INT
 
     # Stop framework and prevent screensaver
     stop_framework
@@ -253,6 +288,7 @@ main() {
 
     while true; do
         cycle=$((cycle + 1))
+        rotate_log
 
         # Wait for touch, power button, or timeout
         touch_coords=""
