@@ -24,12 +24,10 @@ log() {
 }
 
 rotate_log() {
-    if [ -f "$LOG_FILE" ]; then
-        _size="$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)"
-        if [ "$_size" -gt "$MAX_LOG_SIZE" ]; then
-            mv "$LOG_FILE" "${LOG_FILE}.old"
-            log "INFO" "Log rotated"
-        fi
+    _size="$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)"
+    if [ "$_size" -gt "$MAX_LOG_SIZE" ]; then
+        mv "$LOG_FILE" "${LOG_FILE}.old"
+        log "INFO" "Log rotated"
     fi
 }
 
@@ -255,23 +253,22 @@ cleanup() {
 main() {
     mkdir -p "$KINDLEPAD_DIR"
 
-    # Single-instance guard: refuse to start if another live daemon holds the PID file.
     if [ -f "$PIDFILE" ]; then
         _existing="$(cat "$PIDFILE" 2>/dev/null)"
         if [ -n "$_existing" ] && kill -0 "$_existing" 2>/dev/null; then
+            log "WARN" "Refusing to start; PID $_existing already running"
             echo "KindlePad already running (PID $_existing)" >&2
             exit 1
         fi
         rm -f "$PIDFILE"
     fi
     echo $$ > "$PIDFILE"
+    trap cleanup TERM INT
 
     rotate_log
     log "INFO" "KindlePad run.sh starting (PID $$)"
     log "INFO" "Server: ${SERVER_URL}"
     log "INFO" "Refresh: ${REFRESH_INTERVAL}s, full refresh every ${FULL_REFRESH_EVERY} cycles"
-
-    trap cleanup TERM INT
 
     # Stop framework and prevent screensaver
     stop_framework
