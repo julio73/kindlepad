@@ -15,10 +15,22 @@ fi
 
 FBINK="/mnt/us/bin/fbink"
 LOG_FILE="${KINDLEPAD_DIR}/run.log"
+PIDFILE="/var/run/kindlepad.pid"
+MAX_LOG_SIZE=524288  # 512 KB — rotate when exceeded
 
 log() {
     _ts="$(date '+%Y-%m-%d %H:%M:%S')"
     echo "${_ts} [$1] $2" >> "$LOG_FILE"
+}
+
+rotate_log() {
+    if [ -f "$LOG_FILE" ]; then
+        _size="$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)"
+        if [ "$_size" -gt "$MAX_LOG_SIZE" ]; then
+            mv "$LOG_FILE" "${LOG_FILE}.old"
+            log "INFO" "Log rotated"
+        fi
+    fi
 }
 
 # --- Framework control ---
@@ -234,6 +246,7 @@ enter_sleep_mode() {
 cleanup() {
     log "INFO" "KindlePad shutting down"
     rm -f "$SCREEN_FILE"
+    rm -f "$PIDFILE"
     exit 0
 }
 
@@ -241,7 +254,20 @@ cleanup() {
 
 main() {
     mkdir -p "$KINDLEPAD_DIR"
-    log "INFO" "KindlePad run.sh starting"
+
+    # Single-instance guard: refuse to start if another live daemon holds the PID file.
+    if [ -f "$PIDFILE" ]; then
+        _existing="$(cat "$PIDFILE" 2>/dev/null)"
+        if [ -n "$_existing" ] && kill -0 "$_existing" 2>/dev/null; then
+            echo "KindlePad already running (PID $_existing)" >&2
+            exit 1
+        fi
+        rm -f "$PIDFILE"
+    fi
+    echo $$ > "$PIDFILE"
+
+    rotate_log
+    log "INFO" "KindlePad run.sh starting (PID $$)"
     log "INFO" "Server: ${SERVER_URL}"
     log "INFO" "Refresh: ${REFRESH_INTERVAL}s, full refresh every ${FULL_REFRESH_EVERY} cycles"
 
@@ -265,6 +291,7 @@ main() {
 
     while true; do
         cycle=$((cycle + 1))
+        rotate_log
 
         # Wait for touch, power button, or timeout
         touch_coords=""
