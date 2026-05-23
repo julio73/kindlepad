@@ -16,6 +16,7 @@ from .components import (
     draw_footer,
     draw_header,
     draw_light_group,
+    draw_music_section,
     draw_power_button,
     draw_room_header,
     draw_section_header,
@@ -23,7 +24,7 @@ from .components import (
     draw_vertical_divider,
     draw_weather,
 )
-from .theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP, font_display
+from .theme import BETWEEN_SECTIONS, BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP, font_display
 
 
 class RenderEngine:
@@ -44,6 +45,7 @@ class RenderEngine:
         battery_pct: Optional[int] = None,
         is_charging: bool = False,
         station_name: Optional[str] = None,
+        sonos: Optional[dict] = None,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -108,7 +110,7 @@ class RenderEngine:
                     y=ly,
                     width=left_width,
                 )
-            ly += SECTION_GAP
+            ly += BETWEEN_SECTIONS
 
         # TfL line status section
         if tfl_statuses:
@@ -129,9 +131,18 @@ class RenderEngine:
         draw_footer(draw, current_time, left_x, footer_y, left_width, battery_pct=battery_pct, is_charging=is_charging)
 
         # ============================================================
-        # RIGHT PANEL: Lights
+        # RIGHT PANEL: Music, Lights, Weather
         # ============================================================
         ry = header_bottom
+
+        # Music at the top (above lights)
+        if sonos is not None:
+            ry, music_zones = draw_music_section(
+                draw, sonos, right_x, ry, right_width,
+            )
+            for zone in music_zones:
+                touchmap.add(zone)
+            ry += BETWEEN_SECTIONS
 
         if lights:
             ry = draw_section_header(draw, "LIGHTS", right_x, ry)
@@ -142,18 +153,20 @@ class RenderEngine:
                 room = light.get("room", "Other")
                 rooms.setdefault(room, []).append(light)
 
-            for room_name, room_lights in rooms.items():
+            room_items = list(rooms.items())
+            for i, (room_name, room_lights) in enumerate(room_items):
                 ry = draw_room_header(draw, room_name, right_x, ry)
                 ry, zones = draw_light_group(
                     draw, room_lights, right_x, ry, right_width,
                 )
                 for zone in zones:
                     touchmap.add(zone)
-                ry += SECTION_GAP // 2
+                if i < len(room_items) - 1:
+                    ry += SECTION_GAP // 2  # within-section: between rooms
 
-        # Weather at bottom of right panel
+        # Weather pinned to the bottom of the right panel
         if weather is not None:
-            weather_y = max(ry + SECTION_GAP, self.height - 110)
+            weather_y = max(ry + BETWEEN_SECTIONS, self.height - 110)
             draw_weather(draw, weather, right_x, weather_y, right_width)
 
         # ============================================================

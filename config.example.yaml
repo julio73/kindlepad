@@ -28,3 +28,12 @@ tfl:
     - naptan_id: "YOUR_NAPTAN_ID"
       display_name: "Your Station"
   refresh_interval_seconds: 60
+
+sonos:
+  speakers:
+    - id: "living-room"        # opaque internal id used in touch params
+      ip: "192.168.1.42"       # locked at startup, never overridable at runtime
+      name: "Move 2"
+      room: "Living Room"
+      max_volume: 60           # hard cap — stuck button can't blast
+      vol_step: 5

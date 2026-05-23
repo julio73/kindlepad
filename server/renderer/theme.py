@@ -95,7 +95,8 @@ font_label = font_section
 
 # --- Spacing ---
 PADDING = 24
-SECTION_GAP = 20
+SECTION_GAP = 20         # within-section padding (e.g. below a header rule)
+BETWEEN_SECTIONS = 32    # gap between two top-level sections (~2 rem)
 ROW_HEIGHT = 52
 DIVIDER_X = 614   # ~60% of 1024
 PANEL_GAP = 20
