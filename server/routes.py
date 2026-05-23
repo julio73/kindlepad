@@ -24,6 +24,7 @@ async def get_screen(request: Request) -> Response:
     engine = request.app.state.engine
     tfl_client = request.app.state.tfl_client
     dirigera_client = request.app.state.dirigera_client
+    sonos_client = getattr(request.app.state, "sonos_client", None)
     config = request.app.state.config
 
     now = datetime.now().strftime("%H:%M")
@@ -118,6 +119,30 @@ async def get_screen(request: Request) -> Response:
 
     station_name = config.tfl.stations[0].display_name if config.tfl.stations else None
 
+    # Fetch Sonos state for the first configured speaker (single-speaker UI).
+    sonos: dict | None = None
+    if sonos_client is not None and config.sonos.speakers:
+        sp = config.sonos.speakers[0]
+        try:
+            state = sonos_client.get_state(sp.id)
+            sonos = {
+                "speaker_id": state.speaker_id,
+                "name": sp.name,
+                "room": sp.room,
+                "is_playing": state.is_playing,
+                "volume": state.volume,
+                "track_title": state.track_title,
+            }
+        except Exception:
+            sonos = {
+                "speaker_id": sp.id,
+                "name": sp.name,
+                "room": sp.room,
+                "is_playing": False,
+                "volume": 0,
+                "track_title": "",
+            }
+
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
         tfl_statuses=tfl_statuses,
@@ -128,6 +153,7 @@ async def get_screen(request: Request) -> Response:
         battery_pct=battery_pct,
         is_charging=is_charging,
         station_name=station_name,
+        sonos=sonos,
     )
 
     # Store latest touchmap for touch resolution
@@ -148,6 +174,7 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         return {"action": None, "refresh": False}
 
     dirigera_client = request.app.state.dirigera_client
+    sonos_client = getattr(request.app.state, "sonos_client", None)
 
     # Dispatch actions
     refresh = False
@@ -167,6 +194,29 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         device_id = zone.params.get("device_id", "")
         try:
             dirigera_client.toggle(device_id)
+            refresh = True
+        except Exception:
+            pass
+
+    elif zone.action in (
+        "sonos_play_pause",
+        "sonos_vol_up",
+        "sonos_vol_down",
+        "sonos_next",
+        "sonos_prev",
+    ) and sonos_client is not None:
+        speaker_id = zone.params.get("speaker_id", "")
+        try:
+            if zone.action == "sonos_play_pause":
+                sonos_client.play_pause(speaker_id)
+            elif zone.action == "sonos_vol_up":
+                sonos_client.vol_up(speaker_id)
+            elif zone.action == "sonos_vol_down":
+                sonos_client.vol_down(speaker_id)
+            elif zone.action == "sonos_next":
+                sonos_client.next(speaker_id)
+            elif zone.action == "sonos_prev":
+                sonos_client.previous(speaker_id)
             refresh = True
         except Exception:
             pass

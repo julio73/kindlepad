@@ -395,7 +395,7 @@ def draw_weather(
     hl_text = f"H:{high:.0f}\u00b0  L:{low:.0f}\u00b0"
     draw.text((temp_x, row2_y), hl_text, fill=GRAY_MID, font=font_small)
 
-    y += max(icon_size, temp_h + 30) + SECTION_GAP
+    y += max(icon_size, temp_h + 30)
     return y
 
 
@@ -539,6 +539,128 @@ def _draw_cloud(
     right_r = size // 5
     draw.arc([right_x - right_r, base_y - right_r * 2, right_x + right_r, base_y],
              start=180, end=90, fill=FG, width=W)
+
+
+def _ellipsize(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    font,
+) -> str:
+    """Trim text to fit max_width, appending an ellipsis if truncated."""
+    if not text:
+        return ""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    if bbox[2] - bbox[0] <= max_width:
+        return text
+    ell = "…"
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        candidate = text[:mid].rstrip() + ell
+        cb = draw.textbbox((0, 0), candidate, font=font)
+        if cb[2] - cb[0] <= max_width:
+            lo = mid + 1
+        else:
+            hi = mid
+    return (text[: max(0, lo - 1)].rstrip() + ell) if lo > 0 else ell
+
+
+def _draw_media_glyph(
+    draw: ImageDraw.ImageDraw,
+    kind: str,
+    cx: int,
+    cy: int,
+    ink: int,
+) -> None:
+    """Draw filled media-control glyphs centered on (cx, cy)."""
+    if kind == "prev":
+        # Bar + left-pointing triangle
+        draw.rectangle([cx - 11, cy - 9, cx - 8, cy + 9], fill=ink)
+        draw.polygon([(cx + 8, cy - 9), (cx + 8, cy + 9), (cx - 4, cy)], fill=ink)
+    elif kind == "next":
+        draw.polygon([(cx - 8, cy - 9), (cx - 8, cy + 9), (cx + 4, cy)], fill=ink)
+        draw.rectangle([cx + 8, cy - 9, cx + 11, cy + 9], fill=ink)
+    elif kind == "play":
+        draw.polygon([(cx - 9, cy - 11), (cx - 9, cy + 11), (cx + 10, cy)], fill=ink)
+    elif kind == "pause":
+        draw.rectangle([cx - 8, cy - 10, cx - 3, cy + 10], fill=ink)
+        draw.rectangle([cx + 3, cy - 10, cx + 8, cy + 10], fill=ink)
+    elif kind == "vol_down":
+        draw.rectangle([cx - 11, cy - 2, cx + 11, cy + 2], fill=ink)
+    elif kind == "vol_up":
+        draw.rectangle([cx - 11, cy - 2, cx + 11, cy + 2], fill=ink)
+        draw.rectangle([cx - 2, cy - 11, cx + 2, cy + 11], fill=ink)
+
+
+def draw_music_section(
+    draw: ImageDraw.ImageDraw,
+    sonos: dict,
+    x: int,
+    y: int,
+    width: int,
+) -> tuple[int, list[TouchZone]]:
+    """Draw the music control section: header, track title, 5 control buttons.
+
+    `sonos` keys: speaker_id, room, name, is_playing, track_title.
+    Returns (new_y, list of TouchZones).
+    """
+    zones: list[TouchZone] = []
+    speaker_id = sonos.get("speaker_id", "")
+    room = sonos.get("room") or sonos.get("name") or "Music"
+    is_playing = bool(sonos.get("is_playing", False))
+    title = (sonos.get("track_title") or "").strip()
+
+    # Section header
+    y = draw_section_header(draw, f"MUSIC · {room}", x, y)
+
+    # Track title row (em-dash placeholder when nothing playing)
+    label = title if title else "—"
+    label = _ellipsize(draw, label, width, font_small)
+    draw.text((x, y), label, fill=GRAY_MID, font=font_small)
+    bbox = draw.textbbox((0, 0), label, font=font_small)
+    y += (bbox[3] - bbox[1]) + 12
+
+    # 5 equal-width buttons
+    gap = 6
+    btn_w = (width - 4 * gap) // 5
+    btn_h = 56
+    buttons = [
+        ("sonos_prev", "prev"),
+        ("sonos_vol_down", "vol_down"),
+        ("sonos_play_pause", "pause" if is_playing else "play"),
+        ("sonos_vol_up", "vol_up"),
+        ("sonos_next", "next"),
+    ]
+    bx = x
+    for action, kind in buttons:
+        filled = action == "sonos_play_pause" and is_playing
+        if filled:
+            draw.rectangle([bx, y, bx + btn_w, y + btn_h], fill=FG)
+            ink = 255
+        else:
+            draw.rectangle(
+                [bx, y, bx + btn_w, y + btn_h],
+                fill=255,
+                outline=FG,
+                width=2,
+            )
+            ink = FG
+        _draw_media_glyph(draw, kind, bx + btn_w // 2, y + btn_h // 2, ink)
+        zones.append(
+            TouchZone(
+                x=bx,
+                y=y,
+                width=btn_w,
+                height=btn_h,
+                action=action,
+                params={"speaker_id": speaker_id},
+            )
+        )
+        bx += btn_w + gap
+
+    y += btn_h
+    return y, zones
 
 
 def draw_vertical_divider(

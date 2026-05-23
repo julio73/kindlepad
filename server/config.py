@@ -54,12 +54,26 @@ class WeatherConfig(BaseModel):
     location_name: str = "London"
 
 
+class SpeakerConfig(BaseModel):
+    id: str
+    ip: str
+    name: str = ""
+    room: str = ""
+    max_volume: int = 60
+    vol_step: int = 5
+
+
+class SonosConfig(BaseModel):
+    speakers: list[SpeakerConfig] = []
+
+
 class AppConfig(BaseModel):
     server: ServerConfig = ServerConfig()
     screen: ScreenConfig = ScreenConfig()
     dirigera: DirigeraConfig = DirigeraConfig()
     tfl: TflConfig = TflConfig()
     weather: WeatherConfig = WeatherConfig()
+    sonos: SonosConfig = SonosConfig()
 
 
 def load_config(path: str) -> AppConfig:

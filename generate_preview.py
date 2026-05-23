@@ -11,13 +11,14 @@ from server.renderer.components import (
     draw_footer,
     draw_header,
     draw_light_group,
+    draw_music_section,
     draw_room_header,
     draw_section_header,
     draw_tfl_row,
     draw_vertical_divider,
     draw_weather,
 )
-from server.renderer.theme import BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
+from server.renderer.theme import BETWEEN_SECTIONS, BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
 
 WIDTH, HEIGHT = 1024, 758
 
@@ -50,6 +51,15 @@ weather = {
     "rain_chance": 35,
     "condition_code": 2,
     "condition_text": "Partly Cloudy",
+}
+
+sonos = {
+    "speaker_id": "living-room",
+    "name": "Move 2",
+    "room": "Living Room",
+    "is_playing": True,
+    "volume": 32,
+    "track_title": "Wellerman — Nathan Evans",
 }
 
 station_name = "King's Cross St Pancras"
@@ -85,7 +95,7 @@ for dep in departures[:5]:
         y=ly,
         width=left_width,
     )
-ly += SECTION_GAP
+ly += BETWEEN_SECTIONS
 
 ly = draw_section_header(draw, "LINE STATUS", left_x, ly)
 for status in tfl_statuses:
@@ -102,8 +112,11 @@ for status in tfl_statuses:
 footer_y = max(ly + SECTION_GAP, HEIGHT - 44)
 draw_footer(draw, current_time, left_x, footer_y, left_width, battery_pct=battery_pct)
 
-# Right panel: Lights
+# Right panel: Music → Lights → Weather
 ry = header_bottom
+ry, _ = draw_music_section(draw, sonos, right_x, ry, right_width)
+ry += BETWEEN_SECTIONS
+
 ry = draw_section_header(draw, "LIGHTS", right_x, ry)
 
 rooms = OrderedDict()
@@ -111,12 +124,15 @@ for light in lights:
     room = light.get("room", "Other")
     rooms.setdefault(room, []).append(light)
 
-for room_name, room_lights in rooms.items():
+room_items = list(rooms.items())
+for i, (room_name, room_lights) in enumerate(room_items):
     ry = draw_room_header(draw, room_name, right_x, ry)
     ry, zones = draw_light_group(draw, room_lights, right_x, ry, right_width)
-    ry += SECTION_GAP // 2
+    if i < len(room_items) - 1:
+        ry += SECTION_GAP // 2
 
-weather_y = max(ry + SECTION_GAP, HEIGHT - 110)
+# Weather pinned to the bottom of the right panel
+weather_y = max(ry + BETWEEN_SECTIONS, HEIGHT - 110)
 draw_weather(draw, weather, right_x, weather_y, right_width)
 
 draw_vertical_divider(draw, DIVIDER_X, header_bottom, HEIGHT - PADDING)

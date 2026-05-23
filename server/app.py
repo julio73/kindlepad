@@ -66,6 +66,27 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
         pass
     app.state.weather_client = weather_client
 
+    sonos_client = None
+    try:
+        from server.integrations.sonos_client import Speaker, SonosClient
+
+        if config.sonos.speakers:
+            speakers = [
+                Speaker(
+                    id=s.id,
+                    ip=s.ip,
+                    name=s.name,
+                    room=s.room,
+                    max_volume=s.max_volume,
+                    vol_step=s.vol_step,
+                )
+                for s in config.sonos.speakers
+            ]
+            sonos_client = SonosClient(speakers)
+    except (ImportError, Exception):
+        pass
+    app.state.sonos_client = sonos_client
+
     # Include routes
     app.include_router(router)
 

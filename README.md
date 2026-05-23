@@ -9,7 +9,7 @@ Built over a weekend with [Claude Code](https://claude.ai/code).
 
 ## What it does
 
-My Kindle now shows me train departures and line status from TfL, lets me tap to toggle IKEA lights (via a Dirigera hub), and gives me weather at a glance. Handy prep device when heading out.
+My Kindle now shows me train departures and line status from TfL, lets me tap to toggle IKEA lights (via a Dirigera hub), control my Sonos speaker, and gives me weather at a glance. Handy prep device when heading out.
 
 The whole thing runs locally, so no cloud (except cumulonimbus), also no accounts (anon everywhere), and no subscriptions (just daemons on the run).
 
@@ -26,6 +26,7 @@ The Kindle is ~~jailbroken~~ free-ranged, with FBInk for the display and a shell
 | Kindle PW3 | Display and touch input |
 | Galaxy Note 9 | Runs the server in Termux |
 | IKEA Dirigera | Controls the lights locally |
+| Sonos Move 2 | Music control over local SOAP |
 | TfL API | Train times and service status |
 | Open-Meteo | Weather, but it's always raining |
 | Pillow | Draws the dashboard server-side |
