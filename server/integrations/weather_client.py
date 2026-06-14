@@ -86,6 +86,9 @@ class WeatherClient:
         self.longitude = longitude
         self._cached: Optional[WeatherData] = None
         self._cached_at: float = 0.0
+        # False until the first successful fetch; flipped to False on failure so
+        # callers can mark displayed weather as stale.
+        self.last_ok: bool = False
 
     def get_weather(self) -> Optional[WeatherData]:
         """Return current weather data, cached for 10 minutes.
@@ -100,9 +103,11 @@ class WeatherClient:
             data = self._fetch()
             self._cached = data
             self._cached_at = now
+            self.last_ok = True
             return data
         except Exception:
             # Return stale cache if available, otherwise None
+            self.last_ok = False
             return self._cached
 
     def _fetch(self) -> WeatherData:
@@ -113,7 +118,9 @@ class WeatherClient:
             f"&longitude={self.longitude}"
             "&current=temperature_2m,weather_code"
             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-            "&timezone=Europe/London"
+            # `auto` resolves the timezone from the coordinates, so daily
+            # high/low/rain are computed against the local day, not London's.
+            "&timezone=auto"
             "&forecast_days=1"
         )
         response = httpx.get(url, timeout=10.0)

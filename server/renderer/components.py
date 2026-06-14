@@ -254,6 +254,43 @@ def draw_power_button(
     )
 
 
+def draw_brightness_control(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    current_level: int,
+) -> list[TouchZone]:
+    """Draw a 4-step brightness stepper (off → high) as increasing bars.
+
+    Bars up to ``current_level`` are filled; the rest are outlined. Each bar is
+    a tap target emitting ``set_brightness`` with its level (0-3), wired through
+    to the Kindle backlight sysfs write.
+    """
+    zones: list[TouchZone] = []
+    bar_w = 16
+    pitch = 22
+    base_y = y + 26  # common bottom baseline
+    heights = [8, 13, 18, 23]
+    for i, h in enumerate(heights):
+        bx = x + i * pitch
+        top = base_y - h
+        if i <= current_level:
+            draw.rectangle([bx, top, bx + bar_w, base_y], fill=FG)
+        else:
+            draw.rectangle([bx, top, bx + bar_w, base_y], outline=GRAY_MID, width=2)
+        zones.append(
+            TouchZone(
+                x=bx - 3,
+                y=y - 4,
+                width=pitch,
+                height=base_y - y + 12,
+                action="set_brightness",
+                params={"level": i},
+            )
+        )
+    return zones
+
+
 def draw_light_button(
     draw: ImageDraw.ImageDraw,
     name: str,
@@ -352,8 +389,12 @@ def draw_weather(
     x: int,
     y: int,
     width: int,
+    stale: bool = False,
 ) -> int:
     """Draw weather in 3-column layout: icon | temps | condition.
+
+    When ``stale`` is set, an "offline" marker is drawn so a cached/failed
+    reading isn't mistaken for live data.
 
     Returns the y position below the weather section.
     """
@@ -366,6 +407,10 @@ def draw_weather(
 
     # Separator above weather
     draw.line([(x, y), (x + width, y)], fill=GRAY_LIGHT, width=1)
+    if stale:
+        marker = "offline"
+        m_bbox = draw.textbbox((0, 0), marker, font=font_small)
+        draw.text((x + width - (m_bbox[2] - m_bbox[0]), y + 2), marker, fill=GRAY_MID, font=font_small)
     y += 14
 
     # Column 1: Icon (56px, bold filled shapes)
@@ -599,10 +644,12 @@ def draw_music_section(
     x: int,
     y: int,
     width: int,
+    stale: bool = False,
 ) -> tuple[int, list[TouchZone]]:
     """Draw the music control section: header, track title, 5 control buttons.
 
     `sonos` keys: speaker_id, room, name, is_playing, track_title.
+    When ``stale`` is set the header shows an "offline" marker.
     Returns (new_y, list of TouchZones).
     """
     zones: list[TouchZone] = []
@@ -612,7 +659,8 @@ def draw_music_section(
     title = (sonos.get("track_title") or "").strip()
 
     # Section header
-    y = draw_section_header(draw, f"MUSIC · {room}", x, y)
+    subtitle = "offline" if stale else room
+    y = draw_section_header(draw, f"MUSIC · {subtitle}", x, y)
 
     # Track title row (em-dash placeholder when nothing playing)
     label = title if title else "—"

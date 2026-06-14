@@ -15,6 +15,7 @@ TFL_BASE_URL = "https://api.tfl.gov.uk/Line"
 TFL_STOPPOINT_URL = "https://api.tfl.gov.uk/StopPoint"
 
 DEPARTURES_CACHE_TTL = 30  # seconds
+FAILURE_BACKOFF = 60  # seconds to wait before retrying after a failed request
 
 
 @dataclass
@@ -83,6 +84,12 @@ class TflClient:
         self._cache_time: float = 0.0
         self._departures_cache: dict[str, list[TrainDeparture]] = {}
         self._departures_cache_time: dict[str, float] = {}
+        # Backoff timestamps: skip requests until these times after a failure so
+        # an outage doesn't pay the full 10s timeout on every render.
+        self._statuses_retry_after: float = 0.0
+        self._departures_retry_after: dict[str, float] = {}
+        # False after any failed fetch so callers can mark data as stale.
+        self.last_ok: bool = True
 
     def _build_url(self) -> str:
         ids = ",".join(line["id"] for line in self.lines)
@@ -95,7 +102,11 @@ class TflClient:
 
     async def get_statuses(self) -> list[LineStatus]:
         """Fetch line statuses asynchronously via httpx. Cached per refresh_interval."""
+        if not self.lines:
+            return []
         if self._is_cache_valid():
+            return self._cache
+        if time.monotonic() < self._statuses_retry_after:
             return self._cache
 
         url = self._build_url()
@@ -106,10 +117,13 @@ class TflClient:
                 data = resp.json()
         except Exception:
             logger.warning("TfL async request failed", exc_info=True)
+            self.last_ok = False
+            self._statuses_retry_after = time.monotonic() + FAILURE_BACKOFF
             return self._cache if self._cache else []
 
         self._cache = _parse_statuses(data)
         self._cache_time = time.monotonic()
+        self.last_ok = True
         return self._cache
 
     def _is_departures_cache_valid(self, naptan_id: str) -> bool:
@@ -140,6 +154,8 @@ class TflClient:
         """Fetch real-time arrivals for a station. Cached for 30 seconds."""
         if self._is_departures_cache_valid(naptan_id):
             return self._departures_cache[naptan_id]
+        if time.monotonic() < self._departures_retry_after.get(naptan_id, 0.0):
+            return self._departures_cache.get(naptan_id, [])
 
         url = f"{TFL_STOPPOINT_URL}/{naptan_id}/Arrivals"
         try:
@@ -149,6 +165,8 @@ class TflClient:
                 data = resp.json()
         except Exception:
             logger.warning("TfL departures async request failed", exc_info=True)
+            self.last_ok = False
+            self._departures_retry_after[naptan_id] = time.monotonic() + FAILURE_BACKOFF
             return self._departures_cache.get(naptan_id, [])
 
         parsed = self._parse_departures(data)
@@ -160,6 +178,8 @@ class TflClient:
         """Fetch real-time arrivals for a station synchronously. Cached for 30 seconds."""
         if self._is_departures_cache_valid(naptan_id):
             return self._departures_cache[naptan_id]
+        if time.monotonic() < self._departures_retry_after.get(naptan_id, 0.0):
+            return self._departures_cache.get(naptan_id, [])
 
         url = f"{TFL_STOPPOINT_URL}/{naptan_id}/Arrivals"
         try:
@@ -169,6 +189,8 @@ class TflClient:
                 data = resp.json()
         except Exception:
             logger.warning("TfL departures sync request failed", exc_info=True)
+            self.last_ok = False
+            self._departures_retry_after[naptan_id] = time.monotonic() + FAILURE_BACKOFF
             return self._departures_cache.get(naptan_id, [])
 
         parsed = self._parse_departures(data)
@@ -178,7 +200,11 @@ class TflClient:
 
     def get_statuses_sync(self) -> list[LineStatus]:
         """Fetch line statuses synchronously via httpx. Cached per refresh_interval."""
+        if not self.lines:
+            return []
         if self._is_cache_valid():
+            return self._cache
+        if time.monotonic() < self._statuses_retry_after:
             return self._cache
 
         url = self._build_url()
@@ -189,8 +215,11 @@ class TflClient:
                 data = resp.json()
         except Exception:
             logger.warning("TfL sync request failed", exc_info=True)
+            self.last_ok = False
+            self._statuses_retry_after = time.monotonic() + FAILURE_BACKOFF
             return self._cache if self._cache else []
 
         self._cache = _parse_statuses(data)
         self._cache_time = time.monotonic()
+        self.last_ok = True
         return self._cache

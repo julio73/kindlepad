@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
@@ -9,6 +11,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from server.auth import require_auth
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -50,6 +54,7 @@ async def get_screen(request: Request) -> Response:
                 for s in statuses
             ]
         except Exception:
+            logger.warning("Failed to fetch TfL statuses", exc_info=True)
             tfl_statuses = []
 
     # Fetch TfL departures
@@ -67,13 +72,17 @@ async def get_screen(request: Request) -> Response:
                 for d in deps
             ]
         except Exception:
+            logger.warning("Failed to fetch TfL departures", exc_info=True)
             departures = []
 
-    # Fetch light states
+    tfl_stale = tfl_client is not None and not tfl_client.last_ok
+
+    # Fetch light states (blocking dirigera call → off the event loop)
     lights: list[dict] = []
+    lights_stale = False
     if dirigera_client is not None:
         try:
-            light_states = dirigera_client.get_lights()
+            light_states = await asyncio.to_thread(dirigera_client.get_lights)
             lights = [
                 {
                     "id": lt.id,
@@ -83,10 +92,15 @@ async def get_screen(request: Request) -> Response:
                 }
                 for lt in light_states
             ]
+            lights_stale = not dirigera_client.last_ok
         except Exception:
+            logger.warning("Failed to fetch light states", exc_info=True)
             lights = []
+            lights_stale = True
 
-    # Fall back to config-defined devices as mock data if no live data
+    # Fall back to config-defined devices if no live data. This is NOT real
+    # state — mark it stale so the panel shows an "offline" marker rather than
+    # confidently rendering every light as OFF.
     if not lights and config.dirigera.devices:
         lights = [
             {
@@ -98,13 +112,16 @@ async def get_screen(request: Request) -> Response:
             for d in config.dirigera.devices
             if d.type == "light"
         ]
+        if lights:
+            lights_stale = True
 
-    # Fetch weather data
+    # Fetch weather data (blocking httpx call → off the event loop)
     weather: dict | None = None
+    weather_stale = False
     weather_client = getattr(request.app.state, "weather_client", None)
     if weather_client is not None:
         try:
-            wd = weather_client.get_weather()
+            wd = await asyncio.to_thread(weather_client.get_weather)
             if wd is not None:
                 weather = {
                     "temperature": wd.temperature,
@@ -115,16 +132,20 @@ async def get_screen(request: Request) -> Response:
                     "condition_text": wd.condition_text,
                 }
         except Exception:
+            logger.warning("Failed to fetch weather", exc_info=True)
             weather = None
+        weather_stale = weather is not None and not weather_client.last_ok
 
     station_name = config.tfl.stations[0].display_name if config.tfl.stations else None
 
     # Fetch Sonos state for the first configured speaker (single-speaker UI).
+    # Blocking SOAP call → off the event loop.
     sonos: dict | None = None
+    sonos_stale = False
     if sonos_client is not None and config.sonos.speakers:
         sp = config.sonos.speakers[0]
         try:
-            state = sonos_client.get_state(sp.id)
+            state = await asyncio.to_thread(sonos_client.get_state, sp.id)
             sonos = {
                 "speaker_id": state.speaker_id,
                 "name": sp.name,
@@ -134,6 +155,7 @@ async def get_screen(request: Request) -> Response:
                 "track_title": state.track_title,
             }
         except Exception:
+            logger.warning("Failed to fetch Sonos state", exc_info=True)
             sonos = {
                 "speaker_id": sp.id,
                 "name": sp.name,
@@ -142,6 +164,7 @@ async def get_screen(request: Request) -> Response:
                 "volume": 0,
                 "track_title": "",
             }
+            sonos_stale = True
 
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
@@ -154,9 +177,19 @@ async def get_screen(request: Request) -> Response:
         is_charging=is_charging,
         station_name=station_name,
         sonos=sonos,
+        brightness_level=getattr(request.app.state, "brightness_level", 2),
+        lights_stale=lights_stale,
+        tfl_stale=tfl_stale,
+        weather_stale=weather_stale,
+        sonos_stale=sonos_stale,
     )
 
-    # Store latest touchmap for touch resolution
+    # Store latest touchmap for touch resolution.
+    # NOTE: this is a single global slot. It assumes ONE client (the Kindle).
+    # A second concurrent fetcher (e.g. a curious `curl /screen`) would overwrite
+    # the map between the Kindle's fetch and its tap, resolving the tap against
+    # the wrong layout. Fine for the single-panel setup; key by client if that
+    # ever changes.
     request.app.state.touchmap = touchmap
 
     return Response(content=png_bytes, media_type="image/png")
@@ -185,18 +218,10 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         target_state = zone.action == "light_on"
         device_id = zone.params.get("device_id", "")
         try:
-            dirigera_client.set_on(device_id, target_state)
+            await asyncio.to_thread(dirigera_client.set_on, device_id, target_state)
             refresh = True
         except Exception:
-            pass
-
-    elif zone.action == "toggle_light" and dirigera_client is not None:
-        device_id = zone.params.get("device_id", "")
-        try:
-            dirigera_client.toggle(device_id)
-            refresh = True
-        except Exception:
-            pass
+            logger.warning("Failed to set light %s", device_id, exc_info=True)
 
     elif zone.action in (
         "sonos_play_pause",
@@ -206,20 +231,18 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         "sonos_prev",
     ) and sonos_client is not None:
         speaker_id = zone.params.get("speaker_id", "")
+        sonos_dispatch = {
+            "sonos_play_pause": sonos_client.play_pause,
+            "sonos_vol_up": sonos_client.vol_up,
+            "sonos_vol_down": sonos_client.vol_down,
+            "sonos_next": sonos_client.next,
+            "sonos_prev": sonos_client.previous,
+        }
         try:
-            if zone.action == "sonos_play_pause":
-                sonos_client.play_pause(speaker_id)
-            elif zone.action == "sonos_vol_up":
-                sonos_client.vol_up(speaker_id)
-            elif zone.action == "sonos_vol_down":
-                sonos_client.vol_down(speaker_id)
-            elif zone.action == "sonos_next":
-                sonos_client.next(speaker_id)
-            elif zone.action == "sonos_prev":
-                sonos_client.previous(speaker_id)
+            await asyncio.to_thread(sonos_dispatch[zone.action], speaker_id)
             refresh = True
         except Exception:
-            pass
+            logger.warning("Failed Sonos action %s", zone.action, exc_info=True)
 
     elif zone.action == "set_brightness":
         level = zone.params.get("level", 2)
