@@ -165,6 +165,39 @@ class TestNetworkError:
             statuses = client.get_statuses_sync()
 
         assert statuses == []
+        assert client.last_ok is False
+
+
+class TestEmptyLinesNoRequest:
+    def test_empty_lines_no_request(self):
+        """With no lines configured, get_statuses_sync must not build a /Line//Status URL."""
+        client = TflClient(lines=[])
+
+        with patch("server.integrations.tfl_client.httpx.Client") as MockClient:
+            statuses = client.get_statuses_sync()
+
+        assert statuses == []
+        MockClient.assert_not_called()
+        assert client.last_ok is True
+
+
+class TestFailureBackoff:
+    def test_failure_backoff(self):
+        """After a failure, the next call is skipped (no second HTTP request)."""
+        client = TflClient(lines=LINES)
+
+        with patch("server.integrations.tfl_client.httpx.Client") as MockClient:
+            mock_http = MagicMock()
+            mock_http.__enter__ = MagicMock(return_value=mock_http)
+            mock_http.__exit__ = MagicMock(return_value=False)
+            mock_http.get.side_effect = httpx.ConnectError("Connection refused")
+            MockClient.return_value = mock_http
+
+            client.get_statuses_sync()
+            client.get_statuses_sync()  # within backoff window → skipped
+
+        # Only one request attempt despite two calls
+        MockClient.assert_called_once()
 
 
 class TestParseDepartures:
