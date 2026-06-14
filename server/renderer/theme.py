@@ -1,6 +1,9 @@
 """Grayscale theme constants and font loading for e-ink rendering.
 
-Editorial utilitarian design system: DIN Condensed + Avenir Next.
+Editorial utilitarian design system. The bundled, redistributable
+Barlow Condensed (OFL) is preferred so the deployed look is consistent on
+Termux; the original design used DIN Condensed + Avenir Next (proprietary),
+which are tried next when present on the host.
 Think London Underground signage meets broadsheet newspaper.
 """
 
@@ -56,27 +59,39 @@ def _load_default(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFon
 
 
 def _load_display_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
-    """Load DIN Condensed Bold for display numerals, falling back to system fonts."""
+    """Load the display font for numerals/title (bundled Barlow Condensed Bold)."""
     return (
-        _try_load([f"{_FONT_DIR}/DIN Condensed Bold.ttf", "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf"], size)
+        _try_load([
+            f"{_FONT_DIR}/BarlowCondensed-Bold.ttf",
+            f"{_FONT_DIR}/DIN Condensed Bold.ttf",
+            "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf",
+        ], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_default(size)
     )
 
 
 def _load_heading_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
-    """Load DIN Alternate Bold for section headers."""
+    """Load the heading font for section headers (bundled Barlow Condensed SemiBold)."""
     return (
-        _try_load([f"{_FONT_DIR}/DIN Alternate Bold.ttf", "/System/Library/Fonts/Supplemental/DIN Alternate Bold.ttf"], size)
+        _try_load([
+            f"{_FONT_DIR}/BarlowCondensed-SemiBold.ttf",
+            f"{_FONT_DIR}/DIN Alternate Bold.ttf",
+            "/System/Library/Fonts/Supplemental/DIN Alternate Bold.ttf",
+        ], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_display_font(size)
     )
 
 
 def _load_body_font(size: int) -> Union[ImageFont.FreeTypeFont, ImageFont.ImageFont]:
-    """Load Avenir Next for body text."""
+    """Load the body font for readable text (bundled Barlow Condensed Medium)."""
     return (
-        _try_load([f"{_FONT_DIR}/Avenir Next.ttc", "/System/Library/Fonts/Avenir Next.ttc"], size)
+        _try_load([
+            f"{_FONT_DIR}/BarlowCondensed-Medium.ttf",
+            f"{_FONT_DIR}/Avenir Next.ttc",
+            "/System/Library/Fonts/Avenir Next.ttc",
+        ], size)
         or _try_load(_SYSTEM_FALLBACKS, size)
         or _load_display_font(size)
     )
