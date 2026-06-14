@@ -24,6 +24,7 @@ import sys
 import os
 import select
 import json
+import time
 
 # evdev constants
 EV_SYN = 0x00
@@ -110,8 +111,17 @@ def read_touch(device_path, power_path, timeout):
         y = None
         bufs = {fd: b"" for fd in fds}
 
+        # Absolute deadline so a stream of partial events (e.g. a finger resting
+        # on the bezel) can't postpone the timeout indefinitely and starve the
+        # scheduled refresh.
+        deadline = time.time() + float(timeout)
+
         while True:
-            readable, _, _ = select.select(fds, [], [], float(timeout))
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return None
+
+            readable, _, _ = select.select(fds, [], [], remaining)
 
             if not readable:
                 return None
