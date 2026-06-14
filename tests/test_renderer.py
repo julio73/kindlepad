@@ -104,6 +104,47 @@ class TestRenderTouchZones:
             assert zone.action == expected_action
 
 
+class TestRenderBrightnessZones:
+    def test_render_brightness_zones(self):
+        """The header should emit four set_brightness zones (levels 0-3)."""
+        engine = RenderEngine(SCREEN)
+        _, touchmap = engine.render_dashboard(
+            lights=MOCK_LIGHTS,
+            tfl_statuses=[],
+            departures=[],
+            current_time="04:35",
+            current_date="Sat 29 Mar",
+            brightness_level=2,
+        )
+
+        levels = sorted(
+            z.params["level"] for z in touchmap.zones if z.action == "set_brightness"
+        )
+        assert levels == [0, 1, 2, 3]
+
+
+class TestRenderStaleFlags:
+    def test_render_stale_flags(self):
+        """Stale flags should render without error and still produce a valid PNG."""
+        engine = RenderEngine(SCREEN)
+        png_bytes, _ = engine.render_dashboard(
+            lights=MOCK_LIGHTS,
+            tfl_statuses=MOCK_TFL,
+            departures=MOCK_DEPARTURES,
+            current_time="04:35",
+            current_date="Sat 29 Mar",
+            weather={"temperature": 9, "high": 11, "low": 4, "rain_chance": 80,
+                     "condition_code": 61, "condition_text": "Rain"},
+            lights_stale=True,
+            tfl_stale=True,
+            weather_stale=True,
+        )
+
+        assert png_bytes[:4] == PNG_MAGIC
+        img = Image.open(io.BytesIO(png_bytes))
+        assert img.size == (758, 1024)
+
+
 class TestRenderWithDepartures:
     def test_render_with_departures(self):
         """Departures data should render without error and produce valid PNG."""

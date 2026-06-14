@@ -77,10 +77,18 @@ class AppConfig(BaseModel):
 
 
 def load_config(path: str) -> AppConfig:
-    """Load application configuration from a YAML file."""
+    """Load application configuration from a YAML file.
+
+    A missing config file is a hard error: silently falling back to defaults
+    would disable auth (empty token), serve mock light data, and bind 0.0.0.0
+    with no indication anything is wrong.
+    """
     config_path = Path(path)
     if not config_path.exists():
-        return AppConfig()
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. "
+            f"Copy config.example.yaml to config.yaml and edit it."
+        )
     with open(config_path) as f:
         data = yaml.safe_load(f)
     if data is None:

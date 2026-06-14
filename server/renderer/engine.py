@@ -12,6 +12,7 @@ from server.config import ScreenConfig
 from server.touchmap import TouchMap
 
 from .components import (
+    draw_brightness_control,
     draw_departure_row,
     draw_footer,
     draw_header,
@@ -46,6 +47,11 @@ class RenderEngine:
         is_charging: bool = False,
         station_name: Optional[str] = None,
         sonos: Optional[dict] = None,
+        brightness_level: int = 2,
+        lights_stale: bool = False,
+        tfl_stale: bool = False,
+        weather_stale: bool = False,
+        sonos_stale: bool = False,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap).
 
@@ -80,8 +86,16 @@ class RenderEngine:
         # Power/sleep button in header area, right of title
         title_bbox = draw.textbbox((0, 0), "KINDLEPAD", font=font_display)
         title_w = title_bbox[2] - title_bbox[0]
-        power_zone = draw_power_button(draw, PADDING + title_w + 16, PADDING + 10)
+        power_x = PADDING + title_w + 16
+        power_zone = draw_power_button(draw, power_x, PADDING + 10)
         touchmap.add(power_zone)
+
+        # Brightness stepper to the right of the power button
+        brightness_zones = draw_brightness_control(
+            draw, power_x + 58, PADDING + 6, brightness_level
+        )
+        for zone in brightness_zones:
+            touchmap.add(zone)
 
         # --- Panel geometry ---
         left_x = PADDING
@@ -97,7 +111,9 @@ class RenderEngine:
         # Departures section
         if departures:
             header_label = "NEXT TRAINS"
-            if station_name:
+            if tfl_stale:
+                header_label += " \u00b7 offline"
+            elif station_name:
                 header_label += f" \u00b7 {station_name}"
             ly = draw_section_header(draw, header_label, left_x, ly)
             for dep in departures[:5]:
@@ -114,7 +130,9 @@ class RenderEngine:
 
         # TfL line status section
         if tfl_statuses:
-            ly = draw_section_header(draw, "LINE STATUS", left_x, ly)
+            ly = draw_section_header(
+                draw, "LINE STATUS · offline" if tfl_stale else "LINE STATUS", left_x, ly
+            )
             for status in tfl_statuses:
                 ly = draw_tfl_row(
                     draw,
@@ -138,14 +156,16 @@ class RenderEngine:
         # Music at the top (above lights)
         if sonos is not None:
             ry, music_zones = draw_music_section(
-                draw, sonos, right_x, ry, right_width,
+                draw, sonos, right_x, ry, right_width, stale=sonos_stale,
             )
             for zone in music_zones:
                 touchmap.add(zone)
             ry += BETWEEN_SECTIONS
 
         if lights:
-            ry = draw_section_header(draw, "LIGHTS", right_x, ry)
+            ry = draw_section_header(
+                draw, "LIGHTS · offline" if lights_stale else "LIGHTS", right_x, ry
+            )
 
             # Group lights by room, preserving insertion order
             rooms: OrderedDict[str, list[dict]] = OrderedDict()
@@ -164,10 +184,14 @@ class RenderEngine:
                 if i < len(room_items) - 1:
                     ry += SECTION_GAP // 2  # within-section: between rooms
 
-        # Weather pinned to the bottom of the right panel
+        # Weather pinned to the bottom of the right panel.
+        # NOTE: the right panel doesn't paginate — with enough rooms/lights the
+        # light list can collide with this block and content past the bottom edge
+        # is clipped. Fine for the current device's light count; revisit if the
+        # config grows large.
         if weather is not None:
             weather_y = max(ry + BETWEEN_SECTIONS, self.height - 110)
-            draw_weather(draw, weather, right_x, weather_y, right_width)
+            draw_weather(draw, weather, right_x, weather_y, right_width, stale=weather_stale)
 
         # ============================================================
         # Vertical divider

@@ -30,6 +30,9 @@ class DirigeraClient:
         self._name_map = name_map or {}
         self._cache: list[LightState] = []
         self._cache_time: float = 0.0
+        # False until the first successful fetch; flipped to False whenever a
+        # fetch fails so callers can mark the rendered state as stale.
+        self.last_ok: bool = False
 
     def _invalidate_cache(self):
         self._cache_time = 0.0
@@ -44,6 +47,7 @@ class DirigeraClient:
             raw_lights = self.hub.get_lights()
         except Exception:
             logger.warning("Failed to reach Dirigera hub", exc_info=True)
+            self.last_ok = False
             return self._cache if self._cache else []
 
         id_set = set(self.device_ids)
@@ -63,6 +67,7 @@ class DirigeraClient:
 
         self._cache = results
         self._cache_time = now
+        self.last_ok = True
         return results
 
     def _find_raw_light(self, device_id: str):

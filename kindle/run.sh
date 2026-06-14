@@ -13,7 +13,7 @@ else
     exit 1
 fi
 
-FBINK="/mnt/us/bin/fbink"
+FBINK="$(command -v fbink 2>/dev/null || echo /mnt/us/bin/fbink)"
 LOG_FILE="${KINDLEPAD_DIR}/run.log"
 PIDFILE="/var/run/kindlepad.pid"
 MAX_LOG_SIZE=524288  # 512 KB — rotate when exceeded
@@ -253,16 +253,9 @@ cleanup() {
 main() {
     mkdir -p "$KINDLEPAD_DIR"
 
-    if [ -f "$PIDFILE" ]; then
-        _existing="$(cat "$PIDFILE" 2>/dev/null)"
-        if [ -n "$_existing" ] && kill -0 "$_existing" 2>/dev/null; then
-            log "WARN" "Refusing to start; PID $_existing already running"
-            echo "KindlePad already running (PID $_existing)" >&2
-            exit 1
-        fi
-        rm -f "$PIDFILE"
-    fi
-    echo $$ > "$PIDFILE"
+    # The init script (/etc/init.d/kindlepad) owns the PID file: it checks for a
+    # running instance before launching and records our PID afterwards. We only
+    # clean it up on exit via the trap below.
     trap cleanup TERM INT
 
     rotate_log

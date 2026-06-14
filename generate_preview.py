@@ -1,26 +1,19 @@
-"""Generate a sample dashboard preview image for the README."""
+"""Generate a sample dashboard preview image for the README.
 
+Renders through the real engine so the preview always matches what the Kindle
+sees (fonts, power button, brightness stepper, layout), then rotates back to
+landscape for display in the README.
+"""
+
+import io
 import sys
+
 sys.path.insert(0, ".")
 
-from PIL import Image, ImageDraw
-from collections import OrderedDict
+from PIL import Image
 
-from server.renderer.components import (
-    draw_departure_row,
-    draw_footer,
-    draw_header,
-    draw_light_group,
-    draw_music_section,
-    draw_room_header,
-    draw_section_header,
-    draw_tfl_row,
-    draw_vertical_divider,
-    draw_weather,
-)
-from server.renderer.theme import BETWEEN_SECTIONS, BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP
-
-WIDTH, HEIGHT = 1024, 758
+from server.config import ScreenConfig
+from server.renderer.engine import RenderEngine
 
 # --- Sample data ---
 departures = [
@@ -62,81 +55,23 @@ sonos = {
     "track_title": "Wellerman — Nathan Evans",
 }
 
-station_name = "King's Cross St Pancras"
-current_time = "08:15"
-current_date = "Tue 01 Apr"
-battery_pct = 72
+# --- Render via the engine, then rotate back to landscape for the README ---
+engine = RenderEngine(ScreenConfig(width=1024, height=758))
+png_bytes, _ = engine.render_dashboard(
+    lights=lights,
+    tfl_statuses=tfl_statuses,
+    departures=departures,
+    current_time="08:15",
+    current_date="Tue 01 Apr",
+    weather=weather,
+    battery_pct=72,
+    station_name="King's Cross St Pancras",
+    sonos=sonos,
+    brightness_level=2,
+)
 
-# --- Render ---
-img = Image.new("L", (WIDTH, HEIGHT), BG)
-draw = ImageDraw.Draw(img)
-
-y = PADDING
-y = draw_header(draw, "KindlePad", current_time, current_date, WIDTH, y)
-header_bottom = y
-
-left_x = PADDING
-left_width = DIVIDER_X - PANEL_GAP - PADDING
-right_x = DIVIDER_X + PANEL_GAP
-right_width = WIDTH - PADDING - right_x
-
-# Left panel: Transit
-ly = header_bottom
-
-header_label = f"NEXT TRAINS \u00b7 {station_name}"
-ly = draw_section_header(draw, header_label, left_x, ly)
-for dep in departures[:5]:
-    ly = draw_departure_row(
-        draw,
-        minutes=dep["minutes"],
-        destination=dep["destination"],
-        direction=dep["direction"],
-        x=left_x,
-        y=ly,
-        width=left_width,
-    )
-ly += BETWEEN_SECTIONS
-
-ly = draw_section_header(draw, "LINE STATUS", left_x, ly)
-for status in tfl_statuses:
-    ly = draw_tfl_row(
-        draw,
-        line_name=status["name"],
-        status_text=status["status_text"],
-        severity=status["severity"],
-        x=left_x,
-        y=ly,
-        width=left_width,
-    )
-
-footer_y = max(ly + SECTION_GAP, HEIGHT - 44)
-draw_footer(draw, current_time, left_x, footer_y, left_width, battery_pct=battery_pct)
-
-# Right panel: Music → Lights → Weather
-ry = header_bottom
-ry, _ = draw_music_section(draw, sonos, right_x, ry, right_width)
-ry += BETWEEN_SECTIONS
-
-ry = draw_section_header(draw, "LIGHTS", right_x, ry)
-
-rooms = OrderedDict()
-for light in lights:
-    room = light.get("room", "Other")
-    rooms.setdefault(room, []).append(light)
-
-room_items = list(rooms.items())
-for i, (room_name, room_lights) in enumerate(room_items):
-    ry = draw_room_header(draw, room_name, right_x, ry)
-    ry, zones = draw_light_group(draw, room_lights, right_x, ry, right_width)
-    if i < len(room_items) - 1:
-        ry += SECTION_GAP // 2
-
-# Weather pinned to the bottom of the right panel
-weather_y = max(ry + BETWEEN_SECTIONS, HEIGHT - 110)
-draw_weather(draw, weather, right_x, weather_y, right_width)
-
-draw_vertical_divider(draw, DIVIDER_X, header_bottom, HEIGHT - PADDING)
-
-# Save landscape (not rotated) for README
+# The engine rotates the layout 90° clockwise for the portrait framebuffer;
+# rotate it back so the README shows the familiar landscape composition.
+img = Image.open(io.BytesIO(png_bytes)).rotate(90, expand=True)
 img.save("preview.png")
 print("Saved preview.png")

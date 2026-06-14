@@ -49,7 +49,7 @@ fi
 info "FBInk found: $(command -v fbink)"
 
 # Check source files exist
-for f in config.sh kindlepad.sh touch_reader.py; do
+for f in config.sh run.sh touch_reader.py; do
     if [ ! -f "${SOURCE_DIR}/${f}" ]; then
         die "Source file not found: ${SOURCE_DIR}/${f}"
     fi
@@ -65,11 +65,11 @@ mkdir -p "$INSTALL_DIR"
 # Copy files
 info "Copying files to ${INSTALL_DIR}"
 cp "${SOURCE_DIR}/config.sh"       "$INSTALL_DIR/"
-cp "${SOURCE_DIR}/kindlepad.sh"    "$INSTALL_DIR/"
+cp "${SOURCE_DIR}/run.sh"          "$INSTALL_DIR/"
 cp "${SOURCE_DIR}/touch_reader.py" "$INSTALL_DIR/"
 
 # Make scripts executable
-chmod +x "${INSTALL_DIR}/kindlepad.sh"
+chmod +x "${INSTALL_DIR}/run.sh"
 chmod +x "${INSTALL_DIR}/touch_reader.py"
 chmod +x "${INSTALL_DIR}/config.sh"
 
@@ -85,8 +85,8 @@ cat > "$INIT_SCRIPT" << 'INITEOF'
 
 KINDLEPAD_DIR="/mnt/us/kindlepad"
 PIDFILE="/var/run/kindlepad.pid"
-DAEMON="${KINDLEPAD_DIR}/kindlepad.sh"
-LOG="${KINDLEPAD_DIR}/kindlepad.log"
+DAEMON="${KINDLEPAD_DIR}/run.sh"
+LOG="${KINDLEPAD_DIR}/run.log"
 
 case "$1" in
     start)
@@ -183,13 +183,16 @@ echo ""
 echo "To stop KindlePad (restores normal Kindle operation):"
 echo "  ${INIT_SCRIPT} stop"
 echo ""
-echo "To start on boot, add to /etc/upstart/kindlepad.conf:"
+echo "To start on boot, create /etc/upstart/kindlepad.conf:"
 echo "  start on started filesystems"
 echo "  stop on stopping filesystems"
-echo "  exec ${INIT_SCRIPT} start"
+echo "  respawn"
+echo "  exec ${INSTALL_DIR}/run.sh"
+echo "  # (run.sh stays in the foreground, so upstart tracks it directly —"
+echo "  #  don't 'exec ${INIT_SCRIPT} start', which backgrounds and exits.)"
 echo ""
 echo "To check status:"
 echo "  ${INIT_SCRIPT} status"
 echo ""
-echo "Logs: ${INSTALL_DIR}/kindlepad.log"
+echo "Logs: ${INSTALL_DIR}/run.log"
 echo ""
