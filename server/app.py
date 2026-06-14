@@ -2,16 +2,31 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 from fastapi import FastAPI
 
 from server.config import load_config
 from server.renderer.engine import RenderEngine
 from server.routes import router
 
+logger = logging.getLogger(__name__)
 
-def create_app(config_path: str = "config.yaml") -> FastAPI:
+# Default config lives at the repo root (parent of the `server` package), so the
+# server resolves the same file regardless of the current working directory.
+DEFAULT_CONFIG_PATH = str(Path(__file__).resolve().parent.parent / "config.yaml")
+
+
+def create_app(config_path: str | None = None) -> FastAPI:
     """Create and configure the FastAPI application."""
-    config = load_config(config_path)
+    config = load_config(config_path or DEFAULT_CONFIG_PATH)
+
+    if not config.server.token:
+        logger.warning(
+            "No server token configured — AUTHENTICATION IS DISABLED. "
+            "Set server.token in config.yaml to require a Bearer token."
+        )
 
     app = FastAPI(title="KindlePad", version="0.1.0")
 
@@ -36,8 +51,8 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
                 device_ids=device_ids,
                 name_map=name_map,
             )
-    except (ImportError, Exception):
-        pass
+    except Exception:
+        logger.warning("Failed to construct Dirigera client", exc_info=True)
     app.state.dirigera_client = dirigera_client
 
     tfl_client = None
@@ -50,8 +65,8 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
                 lines=lines,
                 refresh_interval=config.tfl.refresh_interval_seconds,
             )
-    except (ImportError, Exception):
-        pass
+    except Exception:
+        logger.warning("Failed to construct TfL client", exc_info=True)
     app.state.tfl_client = tfl_client
 
     weather_client = None
@@ -62,8 +77,8 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
             latitude=config.weather.latitude,
             longitude=config.weather.longitude,
         )
-    except (ImportError, Exception):
-        pass
+    except Exception:
+        logger.warning("Failed to construct weather client", exc_info=True)
     app.state.weather_client = weather_client
 
     sonos_client = None
@@ -83,8 +98,8 @@ def create_app(config_path: str = "config.yaml") -> FastAPI:
                 for s in config.sonos.speakers
             ]
             sonos_client = SonosClient(speakers)
-    except (ImportError, Exception):
-        pass
+    except Exception:
+        logger.warning("Failed to construct Sonos client", exc_info=True)
     app.state.sonos_client = sonos_client
 
     # Include routes
