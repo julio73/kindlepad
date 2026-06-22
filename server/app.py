@@ -51,8 +51,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 device_ids=device_ids,
                 name_map=name_map,
             )
-    except Exception:
-        logger.warning("Failed to construct Dirigera client", exc_info=True)
+    except Exception as e:
+        logger.warning("Failed to construct Dirigera client: %s", e, exc_info=True)
+        dirigera_client = None
     app.state.dirigera_client = dirigera_client
 
     tfl_client = None
@@ -60,13 +61,17 @@ def create_app(config_path: str | None = None) -> FastAPI:
         from server.integrations.tfl_client import TflClient
 
         if config.tfl.lines or config.tfl.stations:
-            lines = [{"id": l.id, "display_name": l.display_name} for l in config.tfl.lines]
+            lines = [
+                {"id": ln.id, "display_name": ln.display_name}
+                for ln in config.tfl.lines
+            ]
             tfl_client = TflClient(
                 lines=lines,
                 refresh_interval=config.tfl.refresh_interval_seconds,
             )
-    except Exception:
-        logger.warning("Failed to construct TfL client", exc_info=True)
+    except Exception as e:
+        logger.warning("Failed to construct TfL client: %s", e, exc_info=True)
+        tfl_client = None
     app.state.tfl_client = tfl_client
 
     weather_client = None
@@ -77,8 +82,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
             latitude=config.weather.latitude,
             longitude=config.weather.longitude,
         )
-    except Exception:
-        logger.warning("Failed to construct weather client", exc_info=True)
+    except Exception as e:
+        logger.warning("Failed to construct weather client: %s", e, exc_info=True)
+        weather_client = None
     app.state.weather_client = weather_client
 
     sonos_client = None
@@ -98,8 +104,9 @@ def create_app(config_path: str | None = None) -> FastAPI:
                 for s in config.sonos.speakers
             ]
             sonos_client = SonosClient(speakers)
-    except Exception:
-        logger.warning("Failed to construct Sonos client", exc_info=True)
+    except Exception as e:
+        logger.warning("Failed to construct Sonos client: %s", e, exc_info=True)
+        sonos_client = None
     app.state.sonos_client = sonos_client
 
     # Include routes
