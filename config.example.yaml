@@ -1,7 +1,8 @@
 server:
   host: "0.0.0.0"
   port: 8070
-  token: "change-me-to-a-secure-token"
+  # Set a long random string to require a Bearer token. Leave empty to disable auth.
+  token: ""
 
 screen:
   width: 1024
@@ -9,7 +10,8 @@ screen:
 
 dirigera:
   hub_ip: "192.168.1.100"
-  token: "your-dirigera-hub-token"
+  # Paste the token printed by `python scripts/pair_dirigera.py`.
+  token: ""
   devices:
     - id: "your-device-id-1"
       name: "Lamp 1"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Optional
 
@@ -25,7 +26,52 @@ from .components import (
     draw_vertical_divider,
     draw_weather,
 )
-from .theme import BETWEEN_SECTIONS, BG, DIVIDER_X, PADDING, PANEL_GAP, SECTION_GAP, font_display
+from .theme import (
+    BETWEEN_SECTIONS,
+    BG,
+    DIVIDER_X,
+    PADDING,
+    PANEL_GAP,
+    SECTION_GAP,
+    font_display,
+)
+
+
+@dataclass
+class DashboardData:
+    """All inputs for a single dashboard render, bundled to keep the panel
+    helpers below the parameter limit.
+
+    lights:
+        List of dicts with keys: id, name, is_on, room.
+    tfl_statuses:
+        List of dicts with keys: name, status_text, severity.
+    departures:
+        List of dicts with keys: minutes, destination, direction.
+    current_time:
+        Formatted time string, e.g. "04:35".
+    current_date:
+        Formatted date string, e.g. "Sat 29 Mar".
+    weather:
+        Optional dict with keys: temperature, high, low, rain_chance,
+        condition_code, condition_text.
+    """
+
+    lights: list[dict] = field(default_factory=list)
+    tfl_statuses: list[dict] = field(default_factory=list)
+    departures: list[dict] = field(default_factory=list)
+    current_time: str = ""
+    current_date: str = ""
+    weather: Optional[dict] = None
+    battery_pct: Optional[int] = None
+    is_charging: bool = False
+    station_name: Optional[str] = None
+    sonos: Optional[dict] = None
+    brightness_level: int = 2
+    lights_stale: bool = False
+    tfl_stale: bool = False
+    weather_stale: bool = False
+    sonos_stale: bool = False
 
 
 class RenderEngine:
@@ -53,132 +99,165 @@ class RenderEngine:
         weather_stale: bool = False,
         sonos_stale: bool = False,
     ) -> tuple[bytes, TouchMap]:
-        """Render the full two-panel dashboard and return (png_bytes, touchmap).
+        """Render the full two-panel dashboard and return (png_bytes, touchmap)."""
+        data = DashboardData(
+            lights=lights,
+            tfl_statuses=tfl_statuses,
+            departures=departures,
+            current_time=current_time,
+            current_date=current_date,
+            weather=weather,
+            battery_pct=battery_pct,
+            is_charging=is_charging,
+            station_name=station_name,
+            sonos=sonos,
+            brightness_level=brightness_level,
+            lights_stale=lights_stale,
+            tfl_stale=tfl_stale,
+            weather_stale=weather_stale,
+            sonos_stale=sonos_stale,
+        )
 
-        Parameters
-        ----------
-        lights:
-            List of dicts with keys: id, name, is_on, room.
-        tfl_statuses:
-            List of dicts with keys: name, status_text, severity.
-        departures:
-            List of dicts with keys: minutes, destination, direction.
-        current_time:
-            Formatted time string, e.g. "04:35".
-        current_date:
-            Formatted date string, e.g. "Sat 29 Mar".
-        weather:
-            Optional dict with keys: temperature, high, low, rain_chance,
-            condition_code, condition_text.
-        """
         img = Image.new("L", (self.width, self.height), BG)
         draw = ImageDraw.Draw(img)
         touchmap = TouchMap()
 
-        y = PADDING
+        header_bottom = self._draw_chrome(draw, touchmap, data)
 
-        # --- Header (full width) ---
-        y = draw_header(
-            draw, "KindlePad", current_time, current_date, self.width, y
-        )
-        header_bottom = y
-
-        # Power/sleep button in header area, right of title
-        title_bbox = draw.textbbox((0, 0), "KINDLEPAD", font=font_display)
-        title_w = title_bbox[2] - title_bbox[0]
-        power_x = PADDING + title_w + 16
-        power_zone = draw_power_button(draw, power_x, PADDING + 10)
-        touchmap.add(power_zone)
-
-        # Brightness stepper to the right of the power button
-        brightness_zones = draw_brightness_control(
-            draw, power_x + 58, PADDING + 6, brightness_level
-        )
-        for zone in brightness_zones:
-            touchmap.add(zone)
-
-        # --- Panel geometry ---
         left_x = PADDING
         left_width = DIVIDER_X - PANEL_GAP - PADDING
         right_x = DIVIDER_X + PANEL_GAP
         right_width = self.width - PADDING - right_x
 
-        # ============================================================
-        # LEFT PANEL: Transit
-        # ============================================================
-        ly = header_bottom
+        self._draw_left_panel(draw, data, left_x, left_width, header_bottom)
+        self._draw_right_panel(
+            draw, touchmap, data, right_x, right_width, header_bottom
+        )
 
-        # Departures section
-        if departures:
+        draw_vertical_divider(draw, DIVIDER_X, header_bottom, self.height - PADDING)
+
+        # Rotate 90 degrees clockwise for portrait framebuffer display.
+        # The Kindle screen is physically 758x1024 portrait, so we render
+        # landscape (1024x758) then rotate to fit.
+        img_rotated = img.rotate(-90, expand=True)
+
+        buf = BytesIO()
+        img_rotated.save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+
+        # Touch coordinates from the Kindle arrive in the rotated (portrait)
+        # coordinate space; the touchmap maps them back to the landscape layout.
+        touchmap._rotation = (self.width, self.height)
+
+        return png_bytes, touchmap
+
+    def _draw_chrome(
+        self,
+        draw: ImageDraw.ImageDraw,
+        touchmap: TouchMap,
+        data: DashboardData,
+    ) -> int:
+        """Draw the header, power button, and brightness stepper.
+
+        Returns the y position below the header separator.
+        """
+        header_bottom = draw_header(
+            draw, "KindlePad", data.current_time, data.current_date, self.width, PADDING
+        )
+
+        # Power/sleep button in header area, right of title
+        title_bbox = draw.textbbox((0, 0), "KINDLEPAD", font=font_display)
+        title_w = title_bbox[2] - title_bbox[0]
+        power_x = PADDING + title_w + 16
+        touchmap.add(draw_power_button(draw, power_x, PADDING + 10))
+
+        # Brightness stepper to the right of the power button
+        for zone in draw_brightness_control(
+            draw, power_x + 58, PADDING + 6, data.brightness_level
+        ):
+            touchmap.add(zone)
+
+        return header_bottom
+
+    def _draw_left_panel(
+        self,
+        draw: ImageDraw.ImageDraw,
+        data: DashboardData,
+        x: int,
+        width: int,
+        top: int,
+    ) -> None:
+        """Draw departures, line status, and the footer in the left panel."""
+        ly = top
+
+        if data.departures:
             header_label = "NEXT TRAINS"
-            if tfl_stale:
-                header_label += " \u00b7 offline"
-            elif station_name:
-                header_label += f" \u00b7 {station_name}"
-            ly = draw_section_header(draw, header_label, left_x, ly)
-            for dep in departures[:5]:
-                ly = draw_departure_row(
-                    draw,
-                    minutes=dep["minutes"],
-                    destination=dep["destination"],
-                    direction=dep["direction"],
-                    x=left_x,
-                    y=ly,
-                    width=left_width,
-                )
+            if data.tfl_stale:
+                header_label += " · offline"
+            elif data.station_name:
+                header_label += f" · {data.station_name}"
+            ly = draw_section_header(draw, header_label, x, ly)
+            for dep in data.departures[:5]:
+                ly = draw_departure_row(draw, dep, x, ly, width)
             ly += BETWEEN_SECTIONS
 
-        # TfL line status section
-        if tfl_statuses:
+        if data.tfl_statuses:
             ly = draw_section_header(
-                draw, "LINE STATUS · offline" if tfl_stale else "LINE STATUS", left_x, ly
+                draw,
+                "LINE STATUS · offline" if data.tfl_stale else "LINE STATUS",
+                x,
+                ly,
             )
-            for status in tfl_statuses:
-                ly = draw_tfl_row(
-                    draw,
-                    line_name=status["name"],
-                    status_text=status["status_text"],
-                    severity=status["severity"],
-                    x=left_x,
-                    y=ly,
-                    width=left_width,
-                )
+            for status in data.tfl_statuses:
+                ly = draw_tfl_row(draw, status, x, ly, width)
 
         # Subtle time-only footer at the bottom of the left panel
         footer_y = max(ly + SECTION_GAP, self.height - 44)
-        draw_footer(draw, current_time, left_x, footer_y, left_width, battery_pct=battery_pct, is_charging=is_charging)
+        draw_footer(
+            draw,
+            data.current_time,
+            x,
+            footer_y,
+            width,
+            battery_pct=data.battery_pct,
+            is_charging=data.is_charging,
+        )
 
-        # ============================================================
-        # RIGHT PANEL: Music, Lights, Weather
-        # ============================================================
-        ry = header_bottom
+    def _draw_right_panel(
+        self,
+        draw: ImageDraw.ImageDraw,
+        touchmap: TouchMap,
+        data: DashboardData,
+        x: int,
+        width: int,
+        top: int,
+    ) -> None:
+        """Draw music, lights, and weather in the right panel."""
+        ry = top
 
         # Music at the top (above lights)
-        if sonos is not None:
+        if data.sonos is not None:
             ry, music_zones = draw_music_section(
-                draw, sonos, right_x, ry, right_width, stale=sonos_stale,
+                draw, data.sonos, x, ry, width, stale=data.sonos_stale
             )
             for zone in music_zones:
                 touchmap.add(zone)
             ry += BETWEEN_SECTIONS
 
-        if lights:
+        if data.lights:
             ry = draw_section_header(
-                draw, "LIGHTS · offline" if lights_stale else "LIGHTS", right_x, ry
+                draw, "LIGHTS · offline" if data.lights_stale else "LIGHTS", x, ry
             )
 
             # Group lights by room, preserving insertion order
             rooms: OrderedDict[str, list[dict]] = OrderedDict()
-            for light in lights:
-                room = light.get("room", "Other")
-                rooms.setdefault(room, []).append(light)
+            for light in data.lights:
+                rooms.setdefault(light.get("room", "Other"), []).append(light)
 
             room_items = list(rooms.items())
             for i, (room_name, room_lights) in enumerate(room_items):
-                ry = draw_room_header(draw, room_name, right_x, ry)
-                ry, zones = draw_light_group(
-                    draw, room_lights, right_x, ry, right_width,
-                )
+                ry = draw_room_header(draw, room_name, x, ry)
+                ry, zones = draw_light_group(draw, room_lights, x, ry, width)
                 for zone in zones:
                     touchmap.add(zone)
                 if i < len(room_items) - 1:
@@ -189,29 +268,8 @@ class RenderEngine:
         # light list can collide with this block and content past the bottom edge
         # is clipped. Fine for the current device's light count; revisit if the
         # config grows large.
-        if weather is not None:
+        if data.weather is not None:
             weather_y = max(ry + BETWEEN_SECTIONS, self.height - 110)
-            draw_weather(draw, weather, right_x, weather_y, right_width, stale=weather_stale)
-
-        # ============================================================
-        # Vertical divider
-        # ============================================================
-        draw_vertical_divider(draw, DIVIDER_X, header_bottom, self.height - PADDING)
-
-        # Rotate 90 degrees clockwise for portrait framebuffer display.
-        # The Kindle screen is physically 758x1024 portrait, so we render
-        # landscape (1024x758) then rotate to fit.
-        img_rotated = img.rotate(-90, expand=True)
-
-        # Encode to PNG
-        buf = BytesIO()
-        img_rotated.save(buf, format="PNG")
-        png_bytes = buf.getvalue()
-
-        # Touch coordinates from the Kindle will be in the rotated (portrait)
-        # coordinate space. We need to map them back to our landscape layout.
-        # Rotated image is 758x1024. A tap at (rx, ry) in rotated space
-        # maps to (ry, 758 - rx) in our landscape layout.
-        touchmap._rotation = (self.width, self.height)
-
-        return png_bytes, touchmap
+            draw_weather(
+                draw, data.weather, x, weather_y, width, stale=data.weather_stale
+            )

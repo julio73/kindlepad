@@ -1,6 +1,12 @@
 """Pair with Dirigera hub to get an access token."""
 
-from dirigera.hub.auth import random_code, send_challenge, get_token, ALPHABET, CODE_LENGTH
+from dirigera.hub.auth import (
+    random_code,
+    send_challenge,
+    get_token,
+    ALPHABET,
+    CODE_LENGTH,
+)
 
 HUB_IP = input("Enter your Dirigera hub IP: ").strip()
 

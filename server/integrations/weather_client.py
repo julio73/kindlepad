@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Optional
 
 import httpx
 
+# Public Open-Meteo host. Overridable via env for testing or a proxy.
+OPEN_METEO_HOST = os.environ.get("OPEN_METEO_HOST", "https://api.open-meteo.com")
+OPEN_METEO_URL = f"{OPEN_METEO_HOST}/v1/forecast"
+
 
 @dataclass
 class WeatherData:
-    temperature: float      # current temp in °C
-    high: float             # today's high
-    low: float              # today's low
-    rain_chance: int        # precipitation probability %
-    condition_code: int     # WMO weather code
-    condition_text: str     # human readable condition
+    temperature: float  # current temp in °C
+    high: float  # today's high
+    low: float  # today's low
+    rain_chance: int  # precipitation probability %
+    condition_code: int  # WMO weather code
+    condition_text: str  # human readable condition
 
 
 # WMO weather code -> human readable condition text
@@ -113,8 +118,7 @@ class WeatherClient:
     def _fetch(self) -> WeatherData:
         """Make the actual HTTP request to Open-Meteo."""
         url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={self.latitude}"
+            OPEN_METEO_URL + f"?latitude={self.latitude}"
             f"&longitude={self.longitude}"
             "&current=temperature_2m,weather_code"
             "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max"

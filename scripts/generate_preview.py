@@ -15,7 +15,6 @@ from PIL import Image
 from server.config import ScreenConfig
 from server.renderer.engine import RenderEngine
 
-# --- Sample data ---
 departures = [
     {"minutes": 1, "destination": "High Barnet", "direction": "Northbound"},
     {"minutes": 4, "destination": "Morden", "direction": "Southbound"},
@@ -55,7 +54,6 @@ sonos = {
     "track_title": "Wellerman — Nathan Evans",
 }
 
-# --- Render via the engine, then rotate back to landscape for the README ---
 engine = RenderEngine(ScreenConfig(width=1024, height=758))
 png_bytes, _ = engine.render_dashboard(
     lights=lights,

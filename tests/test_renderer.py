@@ -89,7 +89,9 @@ class TestRenderTouchZones:
             current_date="Sat 29 Mar",
         )
 
-        light_zones = [z for z in touchmap.zones if z.action in ("light_on", "light_off")]
+        light_zones = [
+            z for z in touchmap.zones if z.action in ("light_on", "light_off")
+        ]
         assert len(light_zones) == len(MOCK_LIGHTS)
 
         zone_ids = {z.params.get("device_id") for z in light_zones}
@@ -133,8 +135,14 @@ class TestRenderStaleFlags:
             departures=MOCK_DEPARTURES,
             current_time="04:35",
             current_date="Sat 29 Mar",
-            weather={"temperature": 9, "high": 11, "low": 4, "rain_chance": 80,
-                     "condition_code": 61, "condition_text": "Rain"},
+            weather={
+                "temperature": 9,
+                "high": 11,
+                "low": 4,
+                "rain_chance": 80,
+                "condition_code": 61,
+                "condition_text": "Rain",
+            },
             lights_stale=True,
             tfl_stale=True,
             weather_stale=True,

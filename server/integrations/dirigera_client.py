@@ -24,7 +24,13 @@ class LightState:
 class DirigeraClient:
     """Client for controlling IKEA lights via a local Dirigera hub."""
 
-    def __init__(self, hub_ip: str, token: str, device_ids: list[str], name_map: Optional[dict[str, str]] = None):
+    def __init__(
+        self,
+        hub_ip: str,
+        token: str,
+        device_ids: list[str],
+        name_map: Optional[dict[str, str]] = None,
+    ):
         self.hub = dirigera.Hub(token=token, ip_address=hub_ip)
         self.device_ids = device_ids
         self._name_map = name_map or {}

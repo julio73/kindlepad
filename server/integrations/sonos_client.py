@@ -35,7 +35,7 @@ SOAP_ENVELOPE = (
     '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
     's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">'
     '<s:Body><u:{action} xmlns:u="{service}">{body}</u:{action}></s:Body>'
-    '</s:Envelope>'
+    "</s:Envelope>"
 )
 
 CONNECT_TIMEOUT = 2.0
@@ -127,8 +127,6 @@ class SonosClient:
                 return el.text or ""
         return None
 
-    # ---- public actions ----
-
     def get_state(self, speaker_id: str) -> SonosState:
         cached = self._cache.get(speaker_id)
         now = time.monotonic()
@@ -181,7 +179,6 @@ class SonosClient:
         return state
 
     def play_pause(self, speaker_id: str) -> None:
-        sp = self._speaker(speaker_id)
         try:
             state = self.get_state(speaker_id)
         except (httpx.HTTPError, SonosError):
