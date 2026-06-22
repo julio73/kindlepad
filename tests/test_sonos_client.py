@@ -77,7 +77,9 @@ def test_unknown_speaker_rejected():
 
 def test_volume_clamped_to_max():
     client = SonosClient([SPEAKER])
-    with patch.object(client._client, "post", return_value=_mock_response(GENERIC_OK)) as post:
+    with patch.object(
+        client._client, "post", return_value=_mock_response(GENERIC_OK)
+    ) as post:
         result = client.set_volume(SPEAKER.id, 200)
     assert result == SPEAKER.max_volume
     # Inspect the SOAP envelope sent — should contain the clamped value.
@@ -88,7 +90,9 @@ def test_volume_clamped_to_max():
 
 def test_volume_clamped_to_zero():
     client = SonosClient([SPEAKER])
-    with patch.object(client._client, "post", return_value=_mock_response(GENERIC_OK)) as post:
+    with patch.object(
+        client._client, "post", return_value=_mock_response(GENERIC_OK)
+    ) as post:
         result = client.set_volume(SPEAKER.id, -50)
     assert result == 0
     body = post.call_args.kwargs["content"].decode()
@@ -97,12 +101,16 @@ def test_volume_clamped_to_zero():
 
 def test_get_state_parses_playing_and_track():
     client = SonosClient([SPEAKER])
-    responses = iter([
-        _mock_response(TRANSPORT_PLAYING),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)):
+    responses = iter(
+        [
+            _mock_response(TRANSPORT_PLAYING),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ):
         state = client.get_state(SPEAKER.id)
     assert state.is_playing is True
     assert state.volume == 25
@@ -111,12 +119,16 @@ def test_get_state_parses_playing_and_track():
 
 def test_get_state_paused():
     client = SonosClient([SPEAKER])
-    responses = iter([
-        _mock_response(TRANSPORT_PAUSED),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)):
+    responses = iter(
+        [
+            _mock_response(TRANSPORT_PAUSED),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ):
         state = client.get_state(SPEAKER.id)
     assert state.is_playing is False
 
@@ -124,13 +136,17 @@ def test_get_state_paused():
 def test_play_pause_envelope_when_paused_sends_play():
     client = SonosClient([SPEAKER])
     # First three calls satisfy get_state, fourth is the Play action.
-    responses = iter([
-        _mock_response(TRANSPORT_PAUSED),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-        _mock_response(GENERIC_OK),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)) as post:
+    responses = iter(
+        [
+            _mock_response(TRANSPORT_PAUSED),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+            _mock_response(GENERIC_OK),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ) as post:
         client.play_pause(SPEAKER.id)
     # Last call is the action — verify Play envelope + SOAPAction header.
     final = post.call_args_list[-1]
@@ -142,13 +158,17 @@ def test_play_pause_envelope_when_paused_sends_play():
 
 def test_play_pause_envelope_when_playing_sends_pause():
     client = SonosClient([SPEAKER])
-    responses = iter([
-        _mock_response(TRANSPORT_PLAYING),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-        _mock_response(GENERIC_OK),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)) as post:
+    responses = iter(
+        [
+            _mock_response(TRANSPORT_PLAYING),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+            _mock_response(GENERIC_OK),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ) as post:
         client.play_pause(SPEAKER.id)
     final = post.call_args_list[-1]
     body = final.kwargs["content"].decode()
@@ -158,13 +178,17 @@ def test_play_pause_envelope_when_playing_sends_pause():
 
 def test_next_and_previous_envelopes():
     client = SonosClient([SPEAKER])
-    with patch.object(client._client, "post", return_value=_mock_response(GENERIC_OK)) as post:
+    with patch.object(
+        client._client, "post", return_value=_mock_response(GENERIC_OK)
+    ) as post:
         client.next(SPEAKER.id)
     body = post.call_args.kwargs["content"].decode()
     assert "<u:Next " in body
     assert post.call_args.kwargs["headers"]["SOAPAction"] == f'"{AV_SERVICE}#Next"'
 
-    with patch.object(client._client, "post", return_value=_mock_response(GENERIC_OK)) as post:
+    with patch.object(
+        client._client, "post", return_value=_mock_response(GENERIC_OK)
+    ) as post:
         client.previous(SPEAKER.id)
     body = post.call_args.kwargs["content"].decode()
     assert "<u:Previous " in body
@@ -172,7 +196,9 @@ def test_next_and_previous_envelopes():
 
 def test_set_volume_soap_action_header():
     client = SonosClient([SPEAKER])
-    with patch.object(client._client, "post", return_value=_mock_response(GENERIC_OK)) as post:
+    with patch.object(
+        client._client, "post", return_value=_mock_response(GENERIC_OK)
+    ) as post:
         client.set_volume(SPEAKER.id, 30)
     assert post.call_args.kwargs["headers"]["SOAPAction"] == f'"{RC_SERVICE}#SetVolume"'
 
@@ -191,12 +217,16 @@ def test_xxe_payload_does_not_expand():
  </s:Body>
 </s:Envelope>"""
     client = SonosClient([SPEAKER])
-    responses = iter([
-        _mock_response(malicious),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)):
+    responses = iter(
+        [
+            _mock_response(malicious),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ):
         # Either defusedxml raises (treated as parse failure -> STOPPED default)
         # or the entity is left unresolved. Either way: must not read /etc/passwd
         # and must not crash.
@@ -226,12 +256,16 @@ def test_billion_laughs_payload_does_not_expand():
  </s:Body>
 </s:Envelope>"""
     client = SonosClient([SPEAKER])
-    responses = iter([
-        _mock_response(bomb),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)):
+    responses = iter(
+        [
+            _mock_response(bomb),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ):
         try:
             state = client.get_state(SPEAKER.id)
         except Exception as e:
@@ -244,13 +278,17 @@ def test_billion_laughs_payload_does_not_expand():
 def test_vol_up_and_down_use_step():
     client = SonosClient([SPEAKER])
     # vol_up: get_state returns 25, +step(5) -> 30
-    responses = iter([
-        _mock_response(TRANSPORT_PAUSED),
-        _mock_response(VOLUME_RESPONSE),
-        _mock_response(POSITION_RESPONSE),
-        _mock_response(GENERIC_OK),
-    ])
-    with patch.object(client._client, "post", side_effect=lambda *a, **k: next(responses)) as post:
+    responses = iter(
+        [
+            _mock_response(TRANSPORT_PAUSED),
+            _mock_response(VOLUME_RESPONSE),
+            _mock_response(POSITION_RESPONSE),
+            _mock_response(GENERIC_OK),
+        ]
+    )
+    with patch.object(
+        client._client, "post", side_effect=lambda *a, **k: next(responses)
+    ) as post:
         result = client.vol_up(SPEAKER.id)
     assert result == 30
     body = post.call_args_list[-1].kwargs["content"].decode()

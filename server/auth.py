@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 
 
 def require_auth(request: Request) -> None:
@@ -16,7 +16,9 @@ def require_auth(request: Request) -> None:
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid Authorization header"
+        )
 
     provided = auth_header.removeprefix("Bearer ")
     if not hmac.compare_digest(provided.encode(), token.encode()):

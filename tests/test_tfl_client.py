@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import httpx
-import pytest
 
 from server.integrations.tfl_client import TflClient, TrainDeparture
 

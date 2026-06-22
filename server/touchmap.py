@@ -43,7 +43,9 @@ class TouchMap:
 
         result = None
         for zone in self.zones:
-            if (zone.x <= x <= zone.x + zone.width
-                    and zone.y <= y <= zone.y + zone.height):
+            if (
+                zone.x <= x <= zone.x + zone.width
+                and zone.y <= y <= zone.y + zone.height
+            ):
                 result = zone
         return result

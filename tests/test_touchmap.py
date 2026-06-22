@@ -16,7 +16,9 @@ class TestResolveHit:
     def test_resolve_hit_params(self):
         """Resolved zone should carry its params."""
         tm = TouchMap()
-        zone = TouchZone(x=0, y=0, width=200, height=200, action="set_on", params={"id": "abc"})
+        zone = TouchZone(
+            x=0, y=0, width=200, height=200, action="set_on", params={"id": "abc"}
+        )
         tm.add(zone)
 
         result = tm.resolve(100, 100)

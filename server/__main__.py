@@ -5,7 +5,9 @@ import uvicorn
 from server.app import DEFAULT_CONFIG_PATH, create_app
 from server.config import load_config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 
 app = create_app()
 
