@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -11,8 +12,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-TFL_BASE_URL = "https://api.tfl.gov.uk/Line"
-TFL_STOPPOINT_URL = "https://api.tfl.gov.uk/StopPoint"
+# Public TfL API host. Overridable via env for testing or a proxy.
+TFL_API_HOST = os.environ.get("TFL_API_HOST", "https://api.tfl.gov.uk")
+TFL_BASE_URL = f"{TFL_API_HOST}/Line"
+TFL_STOPPOINT_URL = f"{TFL_API_HOST}/StopPoint"
 
 DEPARTURES_CACHE_TTL = 30  # seconds
 FAILURE_BACKOFF = 60  # seconds to wait before retrying after a failed request
@@ -129,9 +132,7 @@ class TflClient:
     def _is_departures_cache_valid(self, naptan_id: str) -> bool:
         cached = self._departures_cache.get(naptan_id)
         cache_time = self._departures_cache_time.get(naptan_id, 0.0)
-        return bool(cached) and (
-            time.monotonic() - cache_time < DEPARTURES_CACHE_TTL
-        )
+        return bool(cached) and (time.monotonic() - cache_time < DEPARTURES_CACHE_TTL)
 
     @staticmethod
     def _parse_departures(data: list[dict]) -> list[TrainDeparture]:
@@ -141,7 +142,9 @@ class TflClient:
             minutes = int(item.get("timeToStation", 0)) // 60
             departures.append(
                 TrainDeparture(
-                    destination=_shorten_station(item.get("destinationName", "Unknown")),
+                    destination=_shorten_station(
+                        item.get("destinationName", "Unknown")
+                    ),
                     minutes=minutes,
                     direction=item.get("direction", ""),
                     line_name=item.get("lineName", ""),
