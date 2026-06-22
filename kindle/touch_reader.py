@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 KindlePad Touch Reader
 
@@ -53,9 +52,9 @@ def parse_args(argv):
         if arg == "--timeout" and i + 1 < len(argv):
             try:
                 timeout = int(argv[i + 1])
-            except ValueError:
-                print("Error: --timeout requires an integer", file=sys.stderr)
-                sys.exit(2)
+            except ValueError as e:
+                sys.stderr.write("Error: --timeout requires an integer: %s\n" % e)
+                raise SystemExit(2)
             i += 2
             continue
         elif arg == "--power-device" and i + 1 < len(argv):
@@ -75,10 +74,33 @@ def parse_args(argv):
     if len(positional) >= 2:
         try:
             timeout = int(positional[1])
-        except ValueError:
-            pass
+        except ValueError as e:
+            sys.stderr.write(
+                "Warning: ignoring non-integer timeout %r (%s)\n" % (positional[1], e)
+            )
 
     return device, power_device, timeout
+
+
+def _handle_event(source, event, coords):
+    """Update ``coords`` with a decoded ``event`` ``(type, code, value)`` from the
+    given ``source`` ("touch" or "power"). Returns a result tuple
+    (``("touch", x, y)`` or ``("power",)``) once a gesture completes, else None.
+    """
+    ev_type, ev_code, ev_value = event
+    if source == "touch":
+        if ev_type == EV_ABS and ev_code == ABS_MT_POSITION_X:
+            coords["x"] = ev_value
+        elif ev_type == EV_ABS and ev_code == ABS_MT_POSITION_Y:
+            coords["y"] = ev_value
+        elif ev_type == EV_SYN and ev_code == SYN_REPORT:
+            if coords["x"] is not None and coords["y"] is not None:
+                return ("touch", coords["x"], coords["y"])
+    elif source == "power" and ev_type == EV_KEY and ev_code == KEY_POWER:
+        # KEY_POWER with value=1 is key-down
+        if ev_value == 1:
+            return ("power",)
+    return None
 
 
 def read_touch(device_path, power_path, timeout):
@@ -94,8 +116,8 @@ def read_touch(device_path, power_path, timeout):
         touch_fd = os.open(device_path, os.O_RDONLY | os.O_NONBLOCK)
         fds.append(touch_fd)
     except OSError as e:
-        print("Error opening %s: %s" % (device_path, e), file=sys.stderr)
-        sys.exit(2)
+        sys.stderr.write("Error opening %s: %s\n" % (device_path, e))
+        raise SystemExit(2)
 
     power_fd = None
     if power_path:
@@ -107,8 +129,7 @@ def read_touch(device_path, power_path, timeout):
             pass
 
     try:
-        x = None
-        y = None
+        coords = {"x": None, "y": None}
         bufs = {fd: b"" for fd in fds}
 
         # Absolute deadline so a stream of partial events (e.g. a finger resting
@@ -149,18 +170,15 @@ def read_touch(device_path, power_path, timeout):
                         continue
 
                     if fd == touch_fd:
-                        if ev_type == EV_ABS:
-                            if ev_code == ABS_MT_POSITION_X:
-                                x = ev_value
-                            elif ev_code == ABS_MT_POSITION_Y:
-                                y = ev_value
-                        elif ev_type == EV_SYN and ev_code == SYN_REPORT:
-                            if x is not None and y is not None:
-                                return ("touch", x, y)
+                        source = "touch"
                     elif fd == power_fd:
-                        # KEY_POWER with value=1 is key-down
-                        if ev_type == EV_KEY and ev_code == KEY_POWER and ev_value == 1:
-                            return ("power",)
+                        source = "power"
+                    else:
+                        source = None
+
+                    result = _handle_event(source, (ev_type, ev_code, ev_value), coords)
+                    if result is not None:
+                        return result
     finally:
         for fd in fds:
             os.close(fd)
