@@ -14,30 +14,26 @@ _STROKE = 3
 
 def draw_weather(
     draw: ImageDraw.ImageDraw,
-    weather: dict,
+    weather: dict | None,
     x: int,
     y: int,
     width: int,
     stale: bool = False,
+    stale_since: str | None = None,
 ) -> int:
     """Draw weather in 3-column layout: icon | temps | condition.
 
-    When ``stale`` is set, an "offline" marker is drawn so a cached/failed
-    reading isn't mistaken for live data.
+    When ``stale`` is set, an "offline" marker (with the time of the last
+    successful fetch, when known) is drawn so a cached/failed reading isn't
+    mistaken for live data. ``weather`` may be None when the source is down
+    with nothing cached — the section still renders as a placeholder.
 
     Returns the y position below the weather section.
     """
-    code = weather.get("condition_code", 0)
-    temp = weather.get("temperature", 0)
-    high = weather.get("high", 0)
-    low = weather.get("low", 0)
-    rain = weather.get("rain_chance", 0)
-    condition = weather.get("condition_text", "")
-
     # Separator above weather
     draw.line([(x, y), (x + width, y)], fill=GRAY_LIGHT, width=1)
     if stale:
-        marker = "offline"
+        marker = f"offline since {stale_since}" if stale_since else "offline"
         m_bbox = draw.textbbox((0, 0), marker, font=font_small)
         draw.text(
             (x + width - (m_bbox[2] - m_bbox[0]), y + 2),
@@ -46,6 +42,18 @@ def draw_weather(
             font=font_small,
         )
     y += 14
+
+    if weather is None:
+        draw.text((x, y), "no data", fill=GRAY_MID, font=font_small)
+        nd_bbox = draw.textbbox((0, 0), "no data", font=font_small)
+        return y + (nd_bbox[3] - nd_bbox[1]) + 8
+
+    code = weather.get("condition_code", 0)
+    temp = weather.get("temperature", 0)
+    high = weather.get("high", 0)
+    low = weather.get("low", 0)
+    rain = weather.get("rain_chance", 0)
+    condition = weather.get("condition_text", "")
 
     # Column 1: Icon (56px, bold filled shapes)
     icon_size = 56

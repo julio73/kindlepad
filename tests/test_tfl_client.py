@@ -199,6 +199,27 @@ class TestFailureBackoff:
         MockClient.assert_called_once()
 
 
+class TestLastOkRecovery:
+    def test_departures_success_resets_last_ok(self):
+        """A successful departures fetch must clear a stale last_ok flag
+        (previously only a statuses fetch could, so the panel stayed marked
+        offline until the statuses cache expired)."""
+        client = TflClient(lines=LINES)
+        client.last_ok = False
+
+        with patch("server.integrations.tfl_client.httpx.Client") as MockClient:
+            mock_http = MagicMock()
+            mock_http.__enter__ = MagicMock(return_value=mock_http)
+            mock_http.__exit__ = MagicMock(return_value=False)
+            mock_http.get.return_value = _mock_response(ARRIVALS_RESPONSE)
+            MockClient.return_value = mock_http
+
+            client.get_departures_sync(NAPTAN_ID)
+
+        assert client.last_ok is True
+        assert client.last_ok_at is not None
+
+
 class TestParseDepartures:
     def test_parse_departures(self):
         """Mock arrivals API response and verify TrainDeparture parsing."""

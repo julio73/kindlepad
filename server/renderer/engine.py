@@ -19,6 +19,7 @@ from .components import (
     draw_header,
     draw_light_group,
     draw_music_section,
+    draw_no_data_row,
     draw_power_button,
     draw_room_header,
     draw_section_header,
@@ -72,6 +73,17 @@ class DashboardData:
     tfl_stale: bool = False
     weather_stale: bool = False
     sonos_stale: bool = False
+    # "HH:MM" of the last successful fetch per source (None = never succeeded);
+    # only rendered when the matching *_stale flag is set.
+    lights_since: Optional[str] = None
+    tfl_since: Optional[str] = None
+    weather_since: Optional[str] = None
+    sonos_since: Optional[str] = None
+
+
+def offline_marker(since: Optional[str]) -> str:
+    """Marker text for a stale panel: age when known, bare 'offline' otherwise."""
+    return f"offline since {since}" if since else "offline"
 
 
 class RenderEngine:
@@ -98,6 +110,10 @@ class RenderEngine:
         tfl_stale: bool = False,
         weather_stale: bool = False,
         sonos_stale: bool = False,
+        lights_since: Optional[str] = None,
+        tfl_since: Optional[str] = None,
+        weather_since: Optional[str] = None,
+        sonos_since: Optional[str] = None,
     ) -> tuple[bytes, TouchMap]:
         """Render the full two-panel dashboard and return (png_bytes, touchmap)."""
         data = DashboardData(
@@ -116,6 +132,10 @@ class RenderEngine:
             tfl_stale=tfl_stale,
             weather_stale=weather_stale,
             sonos_stale=sonos_stale,
+            lights_since=lights_since,
+            tfl_since=tfl_since,
+            weather_since=weather_since,
+            sonos_since=sonos_since,
         )
 
         img = Image.new("L", (self.width, self.height), BG)
@@ -190,26 +210,32 @@ class RenderEngine:
         """Draw departures, line status, and the footer in the left panel."""
         ly = top
 
-        if data.departures:
+        # A stale-but-configured section still renders (header + marker +
+        # placeholder) so a dead source never silently vanishes from the layout.
+        if data.departures or (data.tfl_stale and data.station_name):
             header_label = "NEXT TRAINS"
             if data.tfl_stale:
-                header_label += " · offline"
+                header_label += f" · {offline_marker(data.tfl_since)}"
             elif data.station_name:
                 header_label += f" · {data.station_name}"
             ly = draw_section_header(draw, header_label, x, ly)
-            for dep in data.departures[:5]:
-                ly = draw_departure_row(draw, dep, x, ly, width)
+            if data.departures:
+                for dep in data.departures[:5]:
+                    ly = draw_departure_row(draw, dep, x, ly, width)
+            else:
+                ly = draw_no_data_row(draw, x, ly)
             ly += BETWEEN_SECTIONS
 
-        if data.tfl_statuses:
-            ly = draw_section_header(
-                draw,
-                "LINE STATUS · offline" if data.tfl_stale else "LINE STATUS",
-                x,
-                ly,
-            )
-            for status in data.tfl_statuses:
-                ly = draw_tfl_row(draw, status, x, ly, width)
+        if data.tfl_statuses or data.tfl_stale:
+            label = "LINE STATUS"
+            if data.tfl_stale:
+                label += f" · {offline_marker(data.tfl_since)}"
+            ly = draw_section_header(draw, label, x, ly)
+            if data.tfl_statuses:
+                for status in data.tfl_statuses:
+                    ly = draw_tfl_row(draw, status, x, ly, width)
+            else:
+                ly = draw_no_data_row(draw, x, ly)
 
         # Subtle time-only footer at the bottom of the left panel
         footer_y = max(ly + SECTION_GAP, self.height - 44)
@@ -238,16 +264,26 @@ class RenderEngine:
         # Music at the top (above lights)
         if data.sonos is not None:
             ry, music_zones = draw_music_section(
-                draw, data.sonos, x, ry, width, stale=data.sonos_stale
+                draw,
+                data.sonos,
+                x,
+                ry,
+                width,
+                stale=data.sonos_stale,
+                stale_since=data.sonos_since,
             )
             for zone in music_zones:
                 touchmap.add(zone)
             ry += BETWEEN_SECTIONS
 
-        if data.lights:
-            ry = draw_section_header(
-                draw, "LIGHTS · offline" if data.lights_stale else "LIGHTS", x, ry
-            )
+        if data.lights or data.lights_stale:
+            label = "LIGHTS"
+            if data.lights_stale:
+                label += f" · {offline_marker(data.lights_since)}"
+            ry = draw_section_header(draw, label, x, ry)
+
+            if not data.lights:
+                ry = draw_no_data_row(draw, x, ry)
 
             # Group lights by room, preserving insertion order
             rooms: OrderedDict[str, list[dict]] = OrderedDict()
@@ -268,8 +304,14 @@ class RenderEngine:
         # light list can collide with this block and content past the bottom edge
         # is clipped. Fine for the current device's light count; revisit if the
         # config grows large.
-        if data.weather is not None:
+        if data.weather is not None or data.weather_stale:
             weather_y = max(ry + BETWEEN_SECTIONS, self.height - 110)
             draw_weather(
-                draw, data.weather, x, weather_y, width, stale=data.weather_stale
+                draw,
+                data.weather,
+                x,
+                weather_y,
+                width,
+                stale=data.weather_stale,
+                stale_since=data.weather_since,
             )

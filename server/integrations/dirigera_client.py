@@ -39,6 +39,9 @@ class DirigeraClient:
         # False until the first successful fetch; flipped to False whenever a
         # fetch fails so callers can mark the rendered state as stale.
         self.last_ok: bool = False
+        # Wall-clock time of the last successful fetch, for "offline since"
+        # markers. None until the first success.
+        self.last_ok_at: float | None = None
 
     def _invalidate_cache(self):
         self._cache_time = 0.0
@@ -74,6 +77,7 @@ class DirigeraClient:
         self._cache = results
         self._cache_time = now
         self.last_ok = True
+        self.last_ok_at = time.time()
         return results
 
     def _find_raw_light(self, device_id: str):

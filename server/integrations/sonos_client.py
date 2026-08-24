@@ -76,6 +76,12 @@ class SonosClient:
         self._client = httpx.Client(
             timeout=httpx.Timeout(READ_TIMEOUT, connect=CONNECT_TIMEOUT),
         )
+        # False until the first successful state fetch; flipped to False when a
+        # fetch fails so callers can mark the rendered state as stale.
+        self.last_ok: bool = False
+        # Wall-clock time of the last successful fetch, for "offline since"
+        # markers. None until the first success.
+        self.last_ok_at: Optional[float] = None
 
     def close(self) -> None:
         self._client.close()
@@ -135,19 +141,25 @@ class SonosClient:
 
         sp = self._speaker(speaker_id)
         body = "<InstanceID>0</InstanceID>"
-        ti = self._soap(speaker_id, AV_PATH, AV_SERVICE, "GetTransportInfo", body)
+        try:
+            ti = self._soap(speaker_id, AV_PATH, AV_SERVICE, "GetTransportInfo", body)
+
+            vol_body = "<InstanceID>0</InstanceID><Channel>Master</Channel>"
+            vr = self._soap(speaker_id, RC_PATH, RC_SERVICE, "GetVolume", vol_body)
+
+            pi = self._soap(speaker_id, AV_PATH, AV_SERVICE, "GetPositionInfo", body)
+        except Exception:
+            self.last_ok = False
+            raise
+
         transport = self._extract(ti, "CurrentTransportState") or "STOPPED"
         is_playing = transport == "PLAYING"
-
-        vol_body = "<InstanceID>0</InstanceID><Channel>Master</Channel>"
-        vr = self._soap(speaker_id, RC_PATH, RC_SERVICE, "GetVolume", vol_body)
         try:
             volume = int(self._extract(vr, "CurrentVolume") or "0")
         except ValueError:
             volume = 0
         volume = max(0, min(volume, sp.max_volume))
 
-        pi = self._soap(speaker_id, AV_PATH, AV_SERVICE, "GetPositionInfo", body)
         # TrackMetaData is escaped DIDL-Lite. The outer parser already decoded
         # one level of entities when extracting the text node — feed it
         # directly to the inner parser (no extra html.unescape, which would
@@ -176,6 +188,8 @@ class SonosClient:
             track_title=title,
         )
         self._cache[speaker_id] = (now, state)
+        self.last_ok = True
+        self.last_ok_at = time.time()
         return state
 
     def play_pause(self, speaker_id: str) -> None:

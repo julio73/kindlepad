@@ -14,6 +14,7 @@ set -e
 
 INSTALL_DIR="/mnt/us/kindlepad"
 INIT_SCRIPT="/etc/init.d/kindlepad"
+UPSTART_CONF="/etc/upstart/kindlepad.conf"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Helpers ---
@@ -49,7 +50,7 @@ fi
 info "FBInk found: $(command -v fbink)"
 
 # Check source files exist
-for f in config.sh run.sh touch_reader.py; do
+for f in config.sh run.sh kindled.py touch_reader.py; do
     if [ ! -f "${SOURCE_DIR}/${f}" ]; then
         die "Source file not found: ${SOURCE_DIR}/${f}"
     fi
@@ -66,10 +67,12 @@ mkdir -p "$INSTALL_DIR"
 info "Copying files to ${INSTALL_DIR}"
 cp "${SOURCE_DIR}/config.sh"       "$INSTALL_DIR/"
 cp "${SOURCE_DIR}/run.sh"          "$INSTALL_DIR/"
+cp "${SOURCE_DIR}/kindled.py"      "$INSTALL_DIR/"
 cp "${SOURCE_DIR}/touch_reader.py" "$INSTALL_DIR/"
 
 # Make scripts executable
 chmod +x "${INSTALL_DIR}/run.sh"
+chmod +x "${INSTALL_DIR}/kindled.py"
 chmod +x "${INSTALL_DIR}/touch_reader.py"
 chmod +x "${INSTALL_DIR}/config.sh"
 
@@ -87,12 +90,21 @@ KINDLEPAD_DIR="/mnt/us/kindlepad"
 PIDFILE="/var/run/kindlepad.pid"
 DAEMON="${KINDLEPAD_DIR}/run.sh"
 LOG="${KINDLEPAD_DIR}/run.log"
+UPSTART_CONF="/etc/upstart/kindlepad.conf"
 
 case "$1" in
     start)
         if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
             echo "KindlePad is already running (PID $(cat "$PIDFILE"))"
             exit 0
+        fi
+
+        # Delegate to upstart when its job is installed, so the daemon gets
+        # respawn-on-crash and there's a single instance manager.
+        if [ -f "$UPSTART_CONF" ]; then
+            echo "Starting KindlePad (via upstart)..."
+            start kindlepad
+            exit $?
         fi
 
         echo "Starting KindlePad..."
@@ -104,12 +116,22 @@ case "$1" in
         ;;
 
     stop)
+        # Tell upstart first, otherwise it would respawn what we kill below.
+        _upstart_stopped=0
+        if [ -f "$UPSTART_CONF" ]; then
+            if stop kindlepad >/dev/null 2>&1; then
+                _upstart_stopped=1
+                echo "KindlePad stopped (via upstart)"
+                sleep 1  # let the daemon's exit trap clean up its PID file
+            fi
+        fi
+
         if [ ! -f "$PIDFILE" ] || ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-            echo "KindlePad is not running"
+            [ "$_upstart_stopped" = "1" ] || echo "KindlePad is not running"
             rm -f "$PIDFILE"
         else
             echo "Stopping KindlePad (PID $(cat "$PIDFILE"))..."
-            kill "$(cat "$PIDFILE")"
+            kill "$(cat "$PIDFILE")" 2>/dev/null
             # Wait for clean shutdown (the daemon restarts the framework on exit)
             _count=0
             while kill -0 "$(cat "$PIDFILE")" 2>/dev/null && [ "$_count" -lt 10 ]; do
@@ -152,6 +174,29 @@ INITEOF
 chmod +x "$INIT_SCRIPT"
 info "Init script created"
 
+# --- Create upstart job (start on boot, respawn on crash) ---
+
+info "Creating upstart job at ${UPSTART_CONF}"
+mkdir -p /etc/upstart
+cat > "$UPSTART_CONF" << UPSTARTEOF
+# KindlePad dashboard daemon.
+# Starts after the stock UI is up (run.sh then stops it and takes the screen)
+# and respawns run.sh if it ever dies, so the dashboard can't silently freeze
+# on a crashed daemon. Manage with: start kindlepad / stop kindlepad,
+# or ${INIT_SCRIPT} which delegates to upstart.
+description "KindlePad dashboard daemon"
+
+start on started lab126_gui
+stop on stopping filesystems
+
+respawn
+respawn limit 10 60
+
+exec ${INSTALL_DIR}/run.sh
+UPSTARTEOF
+
+info "Upstart job created"
+
 # --- Disable OTA updates ---
 
 OTA_FLAG="/mnt/us/DISABLE_OTA_UPDATES"
@@ -183,13 +228,9 @@ echo ""
 echo "To stop KindlePad (restores normal Kindle operation):"
 echo "  ${INIT_SCRIPT} stop"
 echo ""
-echo "To start on boot, create /etc/upstart/kindlepad.conf:"
-echo "  start on started filesystems"
-echo "  stop on stopping filesystems"
-echo "  respawn"
-echo "  exec ${INSTALL_DIR}/run.sh"
-echo "  # (run.sh stays in the foreground, so upstart tracks it directly —"
-echo "  #  don't 'exec ${INIT_SCRIPT} start', which backgrounds and exits.)"
+echo "Boot autostart + crash respawn: installed at ${UPSTART_CONF}"
+echo "  (KindlePad now starts on boot and restarts if the daemon dies."
+echo "   Remove that file to disable.)"
 echo ""
 echo "To check status:"
 echo "  ${INIT_SCRIPT} status"

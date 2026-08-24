@@ -94,6 +94,9 @@ class WeatherClient:
         # False until the first successful fetch; flipped to False on failure so
         # callers can mark displayed weather as stale.
         self.last_ok: bool = False
+        # Wall-clock time of the last successful fetch, for "offline since"
+        # markers. None until the first success.
+        self.last_ok_at: float | None = None
 
     def get_weather(self) -> Optional[WeatherData]:
         """Return current weather data, cached for 10 minutes.
@@ -109,6 +112,7 @@ class WeatherClient:
             self._cached = data
             self._cached_at = now
             self.last_ok = True
+            self.last_ok_at = time.time()
             return data
         except Exception:
             # Return stale cache if available, otherwise None

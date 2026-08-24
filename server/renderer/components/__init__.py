@@ -12,6 +12,7 @@ from __future__ import annotations
 from .layout import (
     draw_footer,
     draw_header,
+    draw_no_data_row,
     draw_room_header,
     draw_section_header,
     draw_vertical_divider,
@@ -34,6 +35,7 @@ __all__ = [
     "draw_light_button",
     "draw_light_group",
     "draw_music_section",
+    "draw_no_data_row",
     "draw_power_button",
     "draw_room_header",
     "draw_section_header",
