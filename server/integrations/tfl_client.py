@@ -93,6 +93,13 @@ class TflClient:
         self._departures_retry_after: dict[str, float] = {}
         # False after any failed fetch so callers can mark data as stale.
         self.last_ok: bool = True
+        # Wall-clock time of the last successful fetch, for "offline since"
+        # markers. None until the first success.
+        self.last_ok_at: float | None = None
+
+    def _mark_ok(self) -> None:
+        self.last_ok = True
+        self.last_ok_at = time.time()
 
     def _build_url(self) -> str:
         ids = ",".join(line["id"] for line in self.lines)
@@ -126,7 +133,7 @@ class TflClient:
 
         self._cache = _parse_statuses(data)
         self._cache_time = time.monotonic()
-        self.last_ok = True
+        self._mark_ok()
         return self._cache
 
     def _is_departures_cache_valid(self, naptan_id: str) -> bool:
@@ -175,6 +182,7 @@ class TflClient:
         parsed = self._parse_departures(data)
         self._departures_cache[naptan_id] = parsed
         self._departures_cache_time[naptan_id] = time.monotonic()
+        self._mark_ok()
         return parsed
 
     def get_departures_sync(self, naptan_id: str) -> list[TrainDeparture]:
@@ -199,6 +207,7 @@ class TflClient:
         parsed = self._parse_departures(data)
         self._departures_cache[naptan_id] = parsed
         self._departures_cache_time[naptan_id] = time.monotonic()
+        self._mark_ok()
         return parsed
 
     def get_statuses_sync(self) -> list[LineStatus]:
@@ -224,5 +233,5 @@ class TflClient:
 
         self._cache = _parse_statuses(data)
         self._cache_time = time.monotonic()
-        self.last_ok = True
+        self._mark_ok()
         return self._cache

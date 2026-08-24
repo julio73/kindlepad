@@ -152,6 +152,58 @@ class TestRenderStaleFlags:
         img = Image.open(io.BytesIO(png_bytes))
         assert img.size == (758, 1024)
 
+    def test_render_stale_with_since_timestamps(self):
+        """'offline since HH:MM' markers should render and change the output."""
+        engine = RenderEngine(SCREEN)
+        kwargs = dict(
+            lights=MOCK_LIGHTS,
+            tfl_statuses=MOCK_TFL,
+            departures=MOCK_DEPARTURES,
+            current_time="04:35",
+            current_date="Sat 29 Mar",
+            lights_stale=True,
+            tfl_stale=True,
+        )
+        without_since, _ = engine.render_dashboard(**kwargs)
+        with_since, _ = engine.render_dashboard(
+            **kwargs, lights_since="04:12", tfl_since="03:58"
+        )
+
+        assert with_since[:4] == PNG_MAGIC
+        assert with_since != without_since
+
+
+class TestStaleSectionsDoNotVanish:
+    def test_stale_empty_sections_still_render(self):
+        """A failed source with no cached data must render a marked placeholder,
+        not silently disappear from the layout."""
+        engine = RenderEngine(SCREEN)
+        empty_ok, _ = engine.render_dashboard(
+            lights=[],
+            tfl_statuses=[],
+            departures=[],
+            current_time="04:35",
+            current_date="Sat 29 Mar",
+            station_name="Northtown",
+        )
+        empty_stale, _ = engine.render_dashboard(
+            lights=[],
+            tfl_statuses=[],
+            departures=[],
+            current_time="04:35",
+            current_date="Sat 29 Mar",
+            station_name="Northtown",
+            lights_stale=True,
+            tfl_stale=True,
+            weather_stale=True,
+        )
+
+        # Placeholder headers/markers must make the stale render visibly
+        # different from the legitimately-empty one.
+        assert empty_stale != empty_ok
+        img = Image.open(io.BytesIO(empty_stale))
+        assert img.size == (758, 1024)
+
 
 class TestRenderWithDepartures:
     def test_render_with_departures(self):

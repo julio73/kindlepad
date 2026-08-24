@@ -68,11 +68,13 @@ def draw_music_section(
     y: int,
     width: int,
     stale: bool = False,
+    stale_since: str | None = None,
 ) -> tuple[int, list[TouchZone]]:
     """Draw the music control section: header, track title, 5 control buttons.
 
     `sonos` keys: speaker_id, room, name, is_playing, track_title.
-    When ``stale`` is set the header shows an "offline" marker.
+    When ``stale`` is set the header shows an "offline" marker (with the time
+    of the last successful fetch, when known).
     Returns (new_y, list of TouchZones).
     """
     zones: list[TouchZone] = []
@@ -82,7 +84,10 @@ def draw_music_section(
     title = (sonos.get("track_title") or "").strip()
 
     # Section header
-    subtitle = "offline" if stale else room
+    if stale:
+        subtitle = f"offline since {stale_since}" if stale_since else "offline"
+    else:
+        subtitle = room
     y = draw_section_header(draw, f"MUSIC · {subtitle}", x, y)
 
     # Track title row (em-dash placeholder when nothing playing)

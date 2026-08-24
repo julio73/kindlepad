@@ -110,6 +110,20 @@ def draw_section_header(
     return y
 
 
+def draw_no_data_row(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+) -> int:
+    """Placeholder body for a section whose source is down with nothing cached.
+
+    Returns the y position below the row.
+    """
+    draw.text((x, y), "no data", fill=GRAY_MID, font=font_small)
+    bbox = draw.textbbox((0, 0), "no data", font=font_small)
+    return y + (bbox[3] - bbox[1]) + 8
+
+
 def draw_room_header(
     draw: ImageDraw.ImageDraw,
     room_name: str,
