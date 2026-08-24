@@ -9,6 +9,7 @@ TOKEN="your-secret-token"
 # Display settings
 REFRESH_INTERVAL=120       # seconds between screen refreshes
 FULL_REFRESH_EVERY=10      # full e-ink refresh every N cycles (clears ghosting)
+FETCH_TIMEOUT=15           # seconds before a server fetch is abandoned
 
 # Input devices (PW3: touch=event1, power button=event0)
 TOUCH_DEVICE="/dev/input/event1"
@@ -17,3 +18,5 @@ POWER_DEVICE="/dev/input/event0"
 # Paths
 KINDLEPAD_DIR="/mnt/us/kindlepad"
 SCREEN_FILE="/tmp/kindlepad.png"
+BANNER_FILE="/tmp/kindlepad-banner.png"      # cached "disconnected" overlay
+OFFLINE_FILE="/mnt/us/kindlepad/offline.png" # cached tap-failure box (survives reboot)

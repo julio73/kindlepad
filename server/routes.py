@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from server.auth import require_auth
+from server.renderer.overlays import render_disconnected_banner, render_offline_box
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,20 @@ def _parse_battery(raw: str | None) -> int | None:
     if not (raw and raw.isdigit()):
         return None
     return min(int(raw), 100)
+
+
+def _last_ok_stamp(client) -> str | None:
+    """Format a client's last successful fetch time for "offline since" markers.
+
+    "HH:MM" for today, "Ddd HH:MM" for older, None if never succeeded.
+    """
+    at = getattr(client, "last_ok_at", None)
+    if not at:
+        return None
+    dt = datetime.fromtimestamp(at)
+    if dt.date() == datetime.now().date():
+        return dt.strftime("%H:%M")
+    return dt.strftime("%a %H:%M")
 
 
 async def _collect_tfl(tfl_client, config) -> tuple[list[dict], list[dict], bool]:
@@ -123,9 +138,12 @@ async def _collect_weather(weather_client) -> tuple[dict | None, bool]:
             }
     except Exception as e:
         logger.warning("Failed to fetch weather: %s", e, exc_info=True)
-        weather = None
+        return None, True
 
-    weather_stale = weather is not None and not weather_client.last_ok
+    # Stale even when nothing is cached (weather is None): the panel then
+    # renders as an explicit "offline / no data" placeholder instead of
+    # silently disappearing.
+    weather_stale = not weather_client.last_ok
     return weather, weather_stale
 
 
@@ -185,6 +203,11 @@ async def get_screen(request: Request) -> Response:
 
     station_name = config.tfl.stations[0].display_name if config.tfl.stations else None
 
+    tfl_since = _last_ok_stamp(request.app.state.tfl_client)
+    lights_since = _last_ok_stamp(request.app.state.dirigera_client)
+    weather_since = _last_ok_stamp(getattr(request.app.state, "weather_client", None))
+    sonos_since = _last_ok_stamp(getattr(request.app.state, "sonos_client", None))
+
     png_bytes, touchmap = engine.render_dashboard(
         lights=lights,
         tfl_statuses=tfl_statuses,
@@ -201,6 +224,10 @@ async def get_screen(request: Request) -> Response:
         tfl_stale=tfl_stale,
         weather_stale=weather_stale,
         sonos_stale=sonos_stale,
+        lights_since=lights_since,
+        tfl_since=tfl_since,
+        weather_since=weather_since,
+        sonos_since=sonos_since,
     )
 
     # Store latest touchmap for touch resolution.
@@ -280,6 +307,28 @@ async def handle_touch(body: TouchRequest, request: Request) -> dict:
         }
 
     return {"action": zone.action, "refresh": refresh}
+
+
+@router.get("/overlay/disconnected", dependencies=[Depends(require_auth)])
+async def overlay_disconnected(request: Request) -> Response:
+    """Banner PNG the Kindle caches and overlays when it can't reach us.
+
+    Stamped with the current time: the Kindle re-fetches this right after
+    every successful screen fetch, so the baked-in "since" is the time of the
+    last good update — it stays true however long the screen then sits frozen.
+    """
+    width = request.app.state.config.screen.width
+    since = datetime.now().strftime("%H:%M")
+    return Response(
+        content=render_disconnected_banner(since, width=width),
+        media_type="image/png",
+    )
+
+
+@router.get("/overlay/offline", dependencies=[Depends(require_auth)])
+async def overlay_offline() -> Response:
+    """Static "OFFLINE" box the Kindle flashes when a tap can't reach us."""
+    return Response(content=render_offline_box(), media_type="image/png")
 
 
 @router.get("/health")
